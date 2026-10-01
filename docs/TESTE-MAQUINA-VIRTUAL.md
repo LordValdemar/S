@@ -22,6 +22,7 @@ Use o **VirtualBox**, que é gratuito e funciona em Windows, Mac (Intel) e Linux
    - Memória: **2048 MB**; Processadores: **2**; Disco: **20 GB**
 4. **Antes de ligar**, abra **Configurações → Rede → Adaptador 1** e escolha **“Placa em modo Bridge”**. Assim a VM ganha um IP na sua rede, como se fosse outro computador, e o seu navegador e o seu celular conseguem acessá-la.
 5. Ligue a VM e instale o Ubuntu aceitando as opções padrão. Quando perguntar, **marque “Install OpenSSH server”** e crie um usuário e uma senha.
+   > Na tela **Network configuration** do instalador, o IP deve ser da sua rede (ex.: `192.168.0.x`). Se aparecer **`10.0.2.15`**, a VM está em modo **NAT**, não Bridge. Pode continuar a instalação normalmente (escolha *Concluído*). Depois que terminar, desligue a VM (`sudo poweroff`), troque a rede para **Placa em modo Bridge** e ligue de novo: o Ubuntu pega o IP novo sozinho. A opção **“Criar limite”** que aparece nessa tela é uma tradução errada de *“Create bond”* (juntar placas de rede); ignore.
 6. Depois de reiniciar, entre com o seu usuário e veja o IP da VM:
    ```bash
    hostname -I        # ex.: 192.168.0.50
