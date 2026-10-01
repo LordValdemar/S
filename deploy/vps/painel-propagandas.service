@@ -1,0 +1,35 @@
+# Serviço do Painel de Propagandas numa VPS (instalado por deploy/vps/instalar-vps.sh).
+# A configuração (chaves, e-mail, Asaas...) fica em /etc/painel-propagandas/ambiente.
+[Unit]
+Description=Painel de Propagandas
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=painel
+Group=painel
+WorkingDirectory=__PASTA__
+EnvironmentFile=/etc/painel-propagandas/ambiente
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__PASTA__/.venv/bin/python __PASTA__/servidor.py
+Restart=always
+RestartSec=5
+
+# Endurecimento: o serviço não altera o próprio código nem o sistema;
+# só pode escrever na pasta de dados.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__PASTA__/dados
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

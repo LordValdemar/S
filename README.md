@@ -46,6 +46,15 @@ Serve para **usar nas suas lojas** e para **vender como serviço**: cada cliente
 
 Precisa do **Python 3.10 ou mais novo** ([python.org](https://www.python.org/downloads/)).
 
+### Servidor na internet (VPS), para vender
+
+Siga o guia **[docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md)**: HTTPS automático, firewall, atualizações de segurança, cobrança pelo Asaas e backup externo. Resumo:
+
+```bash
+sudo git clone <este-repositório> /opt/painel-propagandas
+sudo /opt/painel-propagandas/deploy/vps/instalar-vps.sh painel.sualoja.com.br voce@sualoja.com.br
+```
+
 ### Linux / Raspberry Pi (recomendado, como serviço)
 
 ```bash
@@ -255,7 +264,11 @@ No Linux com o serviço, coloque as variáveis no arquivo `/etc/systemd/system/p
 
 ## Acesso pela internet (HTTPS)
 
-Na rede local, o acesso direto já é suficiente. **Se o painel for aberto pela internet, use HTTPS**, senão a senha trafega sem criptografia. O jeito mais simples é o [Caddy](https://caddyserver.com), que obtém o certificado sozinho. Veja o exemplo em `deploy/Caddyfile.exemplo` e rode o painel com:
+Na rede local, o acesso direto já é suficiente. **Se o painel for aberto pela internet, use HTTPS**, senão a senha trafega sem criptografia.
+
+> Numa VPS, o instalador do guia **[docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md)** já faz tudo isto sozinho.
+
+Para configurar à mão, o jeito mais simples é o [Caddy](https://caddyserver.com), que obtém o certificado sozinho. Veja o exemplo em `deploy/Caddyfile.exemplo` e rode o painel com:
 
 ```bash
 HOST=127.0.0.1 ATRAS_DE_PROXY=1 COOKIE_SEGURO=1 python servidor.py
@@ -298,6 +311,8 @@ propagandas/
 ├── templates/           # páginas HTML
 └── static/              # CSS e JavaScript
 deploy/                  # serviço systemd, instalador, Windows, quiosque, Caddy
+deploy/vps/              # instalação em VPS: instalador, atualização, administração, backup externo
+docs/HOSPEDAGEM.md       # guia de hospedagem com HTTPS
 Dockerfile, docker-compose.yml
 .github/workflows/       # testes automáticos no GitHub
 tests/                   # testes automáticos (pytest)
