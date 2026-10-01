@@ -51,6 +51,8 @@ nslookup painel.sualoja.com.br     # deve mostrar o IP da VPS
 
 ## 3. Acessar o servidor e protegê-lo
 
+> Este passo é o resumo para VPS. Explicações mais detalhadas (terminal, chaves SSH no Windows, fuso horário, atualizações automáticas, problemas comuns) estão em **[SERVIDOR-LINUX.md](SERVIDOR-LINUX.md)**.
+
 ### 3.1 Chave SSH (no seu computador)
 
 A chave SSH substitui a senha e é muito mais segura. No terminal do seu computador (no Windows: PowerShell):

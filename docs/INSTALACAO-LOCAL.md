@@ -46,6 +46,8 @@ Baixe o projeto (GitHub → *Code → Download ZIP*, ou `git clone`) e escolha o
 
 ### Raspberry Pi / Linux
 
+> Nunca configurou um servidor Linux? Prepare-o antes com o guia **[SERVIDOR-LINUX.md](SERVIDOR-LINUX.md)**: instalação do Ubuntu, atualizações, IP fixo, firewall e o que fazer para o servidor ligar sozinho depois de queda de energia.
+
 ```bash
 cd painel-propagandas
 sudo ./deploy/instalar-linux.sh

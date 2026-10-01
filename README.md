@@ -46,7 +46,7 @@ Serve para **usar nas suas lojas** e para **vender como serviço**: cada cliente
 
 Precisa do **Python 3.10 ou mais novo** ([python.org](https://www.python.org/downloads/)).
 
-> **Guias passo a passo:** [teste numa máquina virtual](docs/TESTE-MAQUINA-VIRTUAL.md) (comece por aqui, sem custo e sem risco); [instalação na loja (local)](docs/INSTALACAO-LOCAL.md), incluindo Raspberry Pi na TV, Windows e acesso de fora; e [hospedagem numa VPS](docs/HOSPEDAGEM.md), para vender.
+> **Guias passo a passo:** [configurando o servidor Linux](docs/SERVIDOR-LINUX.md) (do zero, para iniciantes); [teste numa máquina virtual](docs/TESTE-MAQUINA-VIRTUAL.md) (comece por aqui, sem custo e sem risco); [instalação na loja (local)](docs/INSTALACAO-LOCAL.md), incluindo Raspberry Pi na TV, Windows e acesso de fora; e [hospedagem numa VPS](docs/HOSPEDAGEM.md), para vender.
 
 ### Servidor na internet (VPS), para vender
 
@@ -320,6 +320,7 @@ deploy/vps/              # instalação em VPS: instalador, atualização, admin
 docs/HOSPEDAGEM.md       # guia de hospedagem com HTTPS
 docs/INSTALACAO-LOCAL.md # guia de instalação na loja (Windows, Raspberry Pi, TVs, acesso de fora)
 docs/TESTE-MAQUINA-VIRTUAL.md # como testar tudo numa máquina virtual
+docs/SERVIDOR-LINUX.md   # como preparar um servidor Ubuntu do zero
 deploy/raspberry/        # transforma um Raspberry Pi no player de uma TV
 configuracao.env.exemplo # modelo do arquivo de configuração (copie para configuracao.env)
 Dockerfile, docker-compose.yml

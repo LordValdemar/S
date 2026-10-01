@@ -40,6 +40,8 @@ No VirtualBox: **Máquina → Criar instantâneo** (nome: `limpa`). Se algum tes
 
 ---
 
+> Para entender cada tela do instalador do Ubuntu e os primeiros comandos, veja **[SERVIDOR-LINUX.md](SERVIDOR-LINUX.md)** (passos 0 a 4).
+
 ## 2. Baixe o projeto na VM
 
 ```bash
