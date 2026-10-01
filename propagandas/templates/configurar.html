@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titulo %}Primeiro acesso{% endblock %}
+{% block classe_main %}estreito{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>Bem-vindo! Crie o administrador</h2>
+  <p class="dica">Este é o primeiro acesso. O usuário criado aqui poderá cadastrar propagandas e outros usuários.</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="campo"><label for="usuario">Usuário</label><input type="text" id="usuario" name="usuario" autocomplete="username" required autofocus maxlength="50"></div>
+    <div class="campo"><label for="senha">Senha (mínimo 8 caracteres)</label><input type="password" id="senha" name="senha" autocomplete="new-password" required minlength="8"></div>
+    <div class="campo"><label for="confirmacao">Repita a senha</label><input type="password" id="confirmacao" name="confirmacao" autocomplete="new-password" required minlength="8"></div>
+    <button type="submit">Criar e entrar</button>
+  </form>
+</section>
+{% endblock %}

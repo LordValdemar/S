@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block titulo %}Propagandas{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>Adicionar propagandas</h2>
+  <form action="{{ url_for('painel.enviar') }}" method="post" enctype="multipart/form-data" class="linha">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="flex:3">
+      <label for="arquivos">Imagens ou vídeos ({{ extensoes }})</label>
+      <input type="file" id="arquivos" name="arquivos" multiple required accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm">
+    </div>
+    <div>
+      <label for="duracao">Tempo de cada imagem (s)</label>
+      <input type="number" id="duracao" name="duracao" value="10" min="1" max="3600">
+    </div>
+    <div style="flex:0"><button type="submit">Enviar</button></div>
+  </form>
+</section>
+
+<section>
+  <h2>Letreiro (texto rolando no rodapé)</h2>
+  <form action="{{ url_for('painel.letreiro') }}" method="post" class="linha">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="flex:4">
+      <input type="text" name="letreiro" value="{{ letreiro }}" maxlength="500" aria-label="Texto do letreiro"
+             placeholder="Ex.: Promoção de pão francês: R$ 12,90 o kg! • Aceitamos PIX">
+    </div>
+    <div style="flex:0"><button type="submit">Salvar</button></div>
+  </form>
+  <p class="dica" style="margin-bottom:0">Deixe em branco para esconder o letreiro.</p>
+</section>
+
+<section>
+  <h2>Sequência de exibição ({{ itens|length }})</h2>
+  {% if not itens %}
+    <p class="dica">Nenhuma propaganda cadastrada ainda. Envie imagens ou vídeos acima.</p>
+  {% endif %}
+  {% for item in itens %}
+    {% set url = url_for('exibicao.midia', arquivo=item.arquivo) %}
+    <div class="item">
+      <div>
+        {% if item.tipo == 'video' %}
+          <video class="miniatura" src="{{ url }}" muted preload="metadata"></video>
+        {% else %}
+          <img class="miniatura" src="{{ url }}" alt="">
+        {% endif %}
+        <div style="margin-top:6px">
+          {% if no_ar[item.id] %}<span class="selo no-ar">No ar</span>{% else %}<span class="selo fora">Fora do ar</span>{% endif %}
+          <span class="selo">{{ 'Vídeo' if item.tipo == 'video' else 'Imagem' }}</span>
+        </div>
+      </div>
+      <div>
+        <form action="{{ url_for('painel.atualizar', propaganda_id=item.id) }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="linha">
+            <div style="flex:2"><label>Nome</label><input type="text" name="nome" value="{{ item.nome }}" maxlength="200"></div>
+            <div>
+              <label>{{ 'Tempo máx. (s), o vídeo toca até o fim' if item.tipo == 'video' else 'Tempo na tela (s)' }}</label>
+              <input type="number" name="duracao" value="{{ item.duracao }}" min="1" max="3600">
+            </div>
+          </div>
+          <div class="linha" style="margin-top:8px">
+            <div><label>Começa em (opcional)</label><input type="date" name="inicio" value="{{ item.inicio or '' }}"></div>
+            <div><label>Termina em (opcional)</label><input type="date" name="fim" value="{{ item.fim or '' }}"></div>
+            <div><label><input type="checkbox" name="ativo" {% if item.ativo %}checked{% endif %}> Ativo</label></div>
+          </div>
+          <div class="acoes"><button type="submit">Salvar</button></div>
+        </form>
+        <div class="acoes">
+          <form action="{{ url_for('painel.mover', propaganda_id=item.id, direcao='cima') }}" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="secundario" {% if loop.first %}disabled{% endif %}>↑ Subir</button>
+          </form>
+          <form action="{{ url_for('painel.mover', propaganda_id=item.id, direcao='baixo') }}" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="secundario" {% if loop.last %}disabled{% endif %}>↓ Descer</button>
+          </form>
+          <form action="{{ url_for('painel.excluir', propaganda_id=item.id) }}" method="post" data-confirmar="Excluir esta propaganda?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="perigo">Excluir</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</section>
+{% endblock %}

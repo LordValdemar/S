@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block titulo %}Minha senha{% endblock %}
+{% block classe_main %}estreito{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>Trocar minha senha</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="campo"><label for="atual">Senha atual</label><input type="password" id="atual" name="atual" autocomplete="current-password" required></div>
+    <div class="campo"><label for="nova">Nova senha (mínimo 8 caracteres)</label><input type="password" id="nova" name="nova" autocomplete="new-password" required minlength="8"></div>
+    <div class="campo"><label for="confirmacao">Repita a nova senha</label><input type="password" id="confirmacao" name="confirmacao" autocomplete="new-password" required minlength="8"></div>
+    <button type="submit">Salvar</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,8 @@
+# Abre a tela de exibição em tela cheia quando a sessão gráfica inicia.
+# Copie para ~/.config/autostart/ no computador ligado à TV (ex.: Raspberry Pi).
+# Se o servidor estiver em outro computador, troque "localhost" pelo IP dele.
+[Desktop Entry]
+Type=Application
+Name=Painel de Propagandas - Exibição
+Exec=sh -c "sleep 10; chromium --kiosk --noerrdialogs --disable-infobars --incognito --autoplay-policy=no-user-gesture-required http://localhost:5000/player || chromium-browser --kiosk --noerrdialogs --disable-infobars --incognito --autoplay-policy=no-user-gesture-required http://localhost:5000/player"
+X-GNOME-Autostart-enabled=true

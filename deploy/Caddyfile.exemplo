@@ -1,0 +1,12 @@
+# Exemplo de HTTPS com o Caddy (https://caddyserver.com), que obtém o
+# certificado sozinho. Necessário se o painel for acessado pela internet.
+#
+# Rode o painel com:  ATRAS_DE_PROXY=1 COOKIE_SEGURO=1 python servidor.py
+# e troque o domínio abaixo pelo seu.
+
+painel.sualoja.com.br {
+    request_body {
+        max_size 500MB
+    }
+    reverse_proxy 127.0.0.1:5000
+}

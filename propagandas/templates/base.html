@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}{% endblock %} · Painel de Propagandas</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='painel.css') }}">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E📺%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <header>
+    <h1><a href="{{ url_for('painel.lista') }}">📺 Painel de Propagandas</a></h1>
+    {% if g.usuario %}
+      <nav>
+        <a href="{{ url_for('painel.lista') }}" {% if request.endpoint == 'painel.lista' %}class="atual"{% endif %}>Propagandas</a>
+        {% if g.usuario.papel == 'admin' %}
+          <a href="{{ url_for('auth.usuarios') }}" {% if request.endpoint == 'auth.usuarios' %}class="atual"{% endif %}>Usuários</a>
+        {% endif %}
+        <a href="{{ url_for('auth.minha_senha') }}" {% if request.endpoint == 'auth.minha_senha' %}class="atual"{% endif %}>Minha senha</a>
+        <form action="{{ url_for('auth.sair') }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit">Sair ({{ g.usuario.usuario }})</button>
+        </form>
+        <a class="destaque" href="{{ url_for('exibicao.player') }}" target="_blank" rel="noopener">Abrir tela de exibição</a>
+      </nav>
+    {% endif %}
+  </header>
+  <main class="{% block classe_main %}{% endblock %}">
+    {% for categoria, mensagem in get_flashed_messages(with_categories=true) %}
+      <div class="aviso {{ categoria }}">{{ mensagem }}</div>
+    {% endfor %}
+    {% block conteudo %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', filename='painel.js') }}"></script>
+</body>
+</html>
