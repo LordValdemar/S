@@ -46,7 +46,7 @@ Serve para **usar nas suas lojas** e para **vender como serviço**: cada cliente
 
 Precisa do **Python 3.10 ou mais novo** ([python.org](https://www.python.org/downloads/)).
 
-> **Guias passo a passo:** [instalação na loja (local)](docs/INSTALACAO-LOCAL.md), incluindo Raspberry Pi na TV, Windows e acesso de fora; e [hospedagem numa VPS](docs/HOSPEDAGEM.md), para vender.
+> **Guias passo a passo:** [teste numa máquina virtual](docs/TESTE-MAQUINA-VIRTUAL.md) (comece por aqui, sem custo e sem risco); [instalação na loja (local)](docs/INSTALACAO-LOCAL.md), incluindo Raspberry Pi na TV, Windows e acesso de fora; e [hospedagem numa VPS](docs/HOSPEDAGEM.md), para vender.
 
 ### Servidor na internet (VPS), para vender
 
@@ -262,6 +262,7 @@ Defina como variáveis de ambiente **ou** no arquivo `configuracao.env` na pasta
 | `SMTP_HOST`, `SMTP_PORTA`, `SMTP_USUARIO`, `SMTP_SENHA`, `SMTP_REMETENTE` | (vazio), `587` | Servidor de e-mail. Porta 465 usa SSL; as outras usam STARTTLS |
 | `COOKIE_SEGURO` | desligado | `1` quando o acesso for por **HTTPS** |
 | `ATRAS_DE_PROXY` | desligado | `1` quando houver Caddy/Nginx na frente |
+| `PROXY_CONFIAVEL` | `127.0.0.1` | Endereço do proxy cujos cabeçalhos `X-Forwarded-*` são aceitos (mude só se o proxy rodar em outra máquina ou contêiner) |
 | `CHAVE_SECRETA` | gerada sozinha | Chave das sessões (opcional) |
 
 No Linux com o serviço, coloque as variáveis no arquivo `/etc/systemd/system/painel-propagandas.service` (linhas `Environment=`) e rode `sudo systemctl daemon-reload && sudo systemctl restart painel-propagandas`.
@@ -318,6 +319,7 @@ deploy/                  # serviço systemd, instalador, Windows, quiosque, Cadd
 deploy/vps/              # instalação em VPS: instalador, atualização, administração, backup externo
 docs/HOSPEDAGEM.md       # guia de hospedagem com HTTPS
 docs/INSTALACAO-LOCAL.md # guia de instalação na loja (Windows, Raspberry Pi, TVs, acesso de fora)
+docs/TESTE-MAQUINA-VIRTUAL.md # como testar tudo numa máquina virtual
 deploy/raspberry/        # transforma um Raspberry Pi no player de uma TV
 configuracao.env.exemplo # modelo do arquivo de configuração (copie para configuracao.env)
 Dockerfile, docker-compose.yml

@@ -6,12 +6,17 @@
 #   sudo git clone <repositório> /opt/painel-propagandas
 #   sudo /opt/painel-propagandas/deploy/vps/instalar-vps.sh painel.sualoja.com.br voce@sualoja.com.br
 #
+# Para testar numa máquina virtual, sem domínio público (docs/TESTE-MAQUINA-VIRTUAL.md):
+#   sudo ./deploy/vps/instalar-vps.sh painel.teste voce@exemplo.com --teste
+#
 # Pode rodar de novo sem problema: o que já está configurado é mantido
 # (inclusive /etc/painel-propagandas/ambiente, com as suas chaves).
 set -euo pipefail
 
 DOMINIO="${1:-}"
 EMAIL="${2:-}"
+MODO_TESTE=0
+[ "${3:-}" = "--teste" ] && MODO_TESTE=1
 PASTA="$(cd "$(dirname "$0")/../.." && pwd)"
 USUARIO="painel"
 PASTA_CONFIG="/etc/painel-propagandas"
@@ -53,6 +58,9 @@ python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' \
 
 # ---------------------------------------------------------------------------
 passo "Conferindo o domínio $DOMINIO"
+if [ "$MODO_TESTE" -eq 1 ]; then
+  echo "Modo de teste: certificado HTTPS de teste (o navegador vai mostrar um aviso). Não use em produção."
+else
 IP_SERVIDOR="$(curl -4 -fs --max-time 10 https://api.ipify.org || true)"
 IP_DOMINIO="$(getent ahostsv4 "$DOMINIO" | awk 'NR==1 {print $1}' || true)"
 if [ -z "$IP_DOMINIO" ]; then
@@ -62,6 +70,7 @@ elif [ -n "$IP_SERVIDOR" ] && [ "$IP_DOMINIO" != "$IP_SERVIDOR" ]; then
   aviso "$DOMINIO aponta para $IP_DOMINIO, mas este servidor é $IP_SERVIDOR. Corrija o DNS para o HTTPS funcionar."
 else
   echo "OK: $DOMINIO aponta para este servidor ($IP_DOMINIO)."
+fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -142,6 +151,10 @@ if [ -f /etc/caddy/Caddyfile ] && ! grep -q "Gerado por deploy/vps/instalar-vps.
 fi
 sed -e "s#__DOMINIO__#$DOMINIO#g" -e "s#__EMAIL__#$EMAIL#g" \
   "$PASTA/deploy/vps/Caddyfile.modelo" > /etc/caddy/Caddyfile
+if [ "$MODO_TESTE" -eq 1 ]; then
+  # Certificado emitido por uma autoridade local do próprio Caddy, sem precisar de domínio público.
+  sed -i "s#^\tencode gzip#\ttls internal\n\tencode gzip#" /etc/caddy/Caddyfile
+fi
 if ! SAIDA_CADDY="$(caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1)"; then
   echo "$SAIDA_CADDY" >&2
   erro "a configuração do Caddy é inválida (veja acima)"
@@ -169,15 +182,27 @@ systemctl enable --now fail2ban >/dev/null 2>&1 || true
 # ---------------------------------------------------------------------------
 passo "Conferindo se está tudo funcionando"
 for _ in $(seq 1 30); do
-  curl -fsS --max-time 2 http://127.0.0.1:5000/saude >/dev/null 2>&1 && break
+  curl -fsS --noproxy "*" --max-time 2 http://127.0.0.1:5000/saude >/dev/null 2>&1 && break
   sleep 1
 done
-if curl -fsS --max-time 2 http://127.0.0.1:5000/saude >/dev/null 2>&1; then
+if curl -fsS --noproxy "*" --max-time 2 http://127.0.0.1:5000/saude >/dev/null 2>&1; then
   echo "OK: o painel está rodando."
 else
   erro "o painel não respondeu. Veja o motivo com: journalctl -u painel-propagandas -n 50"
 fi
-if curl -fsS --max-time 20 "https://$DOMINIO/saude" >/dev/null 2>&1; then
+if [ "$MODO_TESTE" -eq 1 ]; then
+  if curl -fsSk --noproxy "*" --max-time 20 --resolve "$DOMINIO:443:127.0.0.1" "https://$DOMINIO/saude" >/dev/null 2>&1; then
+    echo "OK: https://$DOMINIO responde (certificado de teste)."
+  else
+    aviso "o HTTPS de teste ainda não respondeu. Veja: journalctl -u caddy -n 50"
+  fi
+  IP_LOCAL="$(hostname -I | awk '{print $1}')"
+  echo
+  echo "No SEU computador, adicione ao arquivo hosts a linha:   $IP_LOCAL $DOMINIO"
+  printf '%s\n' '  Windows: C:\Windows\System32\drivers\etc\hosts (abra o Bloco de Notas como administrador)'
+  echo "  Mac/Linux: /etc/hosts"
+  echo "Depois abra https://$DOMINIO e aceite o aviso do certificado de teste."
+elif curl -fsS --max-time 20 "https://$DOMINIO/saude" >/dev/null 2>&1; then
   echo "OK: https://$DOMINIO está no ar com certificado válido."
 else
   aviso "https://$DOMINIO ainda não respondeu. Se o DNS acabou de ser criado, aguarde alguns minutos."

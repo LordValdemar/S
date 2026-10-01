@@ -29,7 +29,7 @@ echo "==> Atualizando as dependências"
 echo "==> Reiniciando (o banco de dados é atualizado sozinho na inicialização)"
 systemctl restart painel-propagandas
 for _ in $(seq 1 30); do
-  if curl -fsS --max-time 2 http://127.0.0.1:5000/saude >/dev/null 2>&1; then
+  if curl -fsS --noproxy "*" --max-time 2 http://127.0.0.1:5000/saude >/dev/null 2>&1; then
     echo "OK: atualizado de $ANTES para $DEPOIS e funcionando."
     exit 0
   fi
