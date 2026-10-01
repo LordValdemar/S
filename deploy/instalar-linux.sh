@@ -23,6 +23,13 @@ sudo -u "$USUARIO" "$PASTA/.venv/bin/pip" install --quiet --upgrade pip
 sudo -u "$USUARIO" "$PASTA/.venv/bin/pip" install --quiet -r "$PASTA/requirements.txt"
 sudo -u "$USUARIO" mkdir -p "$PASTA/dados"
 
+if [ ! -f "$PASTA/configuracao.env" ]; then
+  echo "==> Criando o arquivo de configuração (configuracao.env)"
+  sudo -u "$USUARIO" cp "$PASTA/configuracao.env.exemplo" "$PASTA/configuracao.env"
+fi
+# Pode conter chaves (Asaas, e-mail): só o dono lê.
+chmod 600 "$PASTA/configuracao.env"
+
 echo "==> Instalando o serviço"
 sed -e "s#__PASTA__#$PASTA#g" -e "s#__USUARIO__#$USUARIO#g" \
   "$PASTA/deploy/painel-propagandas.service" > /etc/systemd/system/painel-propagandas.service
@@ -33,7 +40,7 @@ IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo
 echo "Pronto! O painel inicia sozinho quando o computador ligar."
 echo "  Painel:   http://${IP:-localhost}:5000/"
-echo "  Exibição: http://${IP:-localhost}:5000/player"
+echo "  Configuração: $PASTA/configuracao.env (depois de editar: sudo systemctl restart painel-propagandas)"
 echo
 echo "Comandos úteis:"
 echo "  systemctl status painel-propagandas     # ver se está rodando"

@@ -13,14 +13,26 @@ Para desenvolvimento, com recarga automática:
 
 import logging
 import os
+import socket
 
 from waitress import serve
 
-from propagandas import create_app
+from propagandas import arquivo_config, create_app
 from propagandas.tarefas import iniciar_tarefas
 
 
+def ip_na_rede_local():
+    """IP deste computador na rede da loja (para abrir o painel de outro aparelho)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as conexao:
+            conexao.connect(("8.8.8.8", 80))  # UDP: nada é enviado, só escolhe a interface de rede
+            return conexao.getsockname()[0]
+    except OSError:
+        return None
+
+
 def main():
+    arquivo = arquivo_config.carregar()  # configuracao.env, se existir
     app = create_app()
     iniciar_tarefas(app)  # monitoramento das telas, backup diário e limpeza
 
@@ -29,8 +41,12 @@ def main():
     log = logging.getLogger("propagandas")
     log.info("Painel de Propagandas iniciado")
     log.info("Painel:   http://localhost:%s/", porta)
-    log.info("Exibição: http://localhost:%s/player", porta)
+    ip = ip_na_rede_local()
+    if ip and host == "0.0.0.0":
+        log.info("Na rede da loja (celular, outros computadores e TVs): http://%s:%s/", ip, porta)
     log.info("Dados em: %s", app.config["PASTA_DADOS"])
+    if arquivo:
+        log.info("Configuração lida de: %s", arquivo)
 
     serve(
         app,

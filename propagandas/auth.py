@@ -392,7 +392,7 @@ def minha_conta():
             conexao = db.obter()
             with conexao:
                 conexao.execute("UPDATE usuarios SET totp_pendente = ? WHERE id = ?", (segredo, g.usuario["id"]))
-        qr = totp.qr_code(segredo, g.usuario["usuario"])
+        qr = totp.qr_code(segredo, g.usuario["usuario"], current_app.config["NOME_PLATAFORMA"])
     return render_template("conta.html", segredo=segredo, qr=qr)
 
 

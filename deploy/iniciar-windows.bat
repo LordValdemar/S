@@ -10,6 +10,9 @@ if not exist ".venv\Scripts\python.exe" (
 )
 ".venv\Scripts\python.exe" -m pip install --quiet -r requirements.txt || goto erro
 
+REM Arquivo de configuracao (nome da marca, e-mail, Asaas...). Edite com o Bloco de Notas.
+if not exist configuracao.env copy configuracao.env.exemplo configuracao.env >nul
+
 :loop
 ".venv\Scripts\python.exe" servidor.py
 echo O servidor parou. Reiniciando em 5 segundos...

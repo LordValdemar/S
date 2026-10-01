@@ -48,6 +48,6 @@ def uri(segredo, usuario, emissor="Painel de Propagandas"):
     return f"otpauth://totp/{rotulo}?secret={segredo}&issuer={quote(emissor)}&digits={DIGITOS}&period={PASSO}"
 
 
-def qr_code(segredo, usuario):
+def qr_code(segredo, usuario, emissor="Painel de Propagandas"):
     """QR code (imagem SVG embutida) para o aplicativo autenticador ler."""
-    return segno.make(uri(segredo, usuario), error="m").svg_data_uri(scale=5, border=2)
+    return segno.make(uri(segredo, usuario, emissor), error="m").svg_data_uri(scale=5, border=2)

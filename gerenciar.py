@@ -15,7 +15,7 @@ import argparse
 import getpass
 import sys
 
-from propagandas import create_app, db
+from propagandas import arquivo_config, create_app, db
 from propagandas.auth import EMPRESA_PRINCIPAL, PAPEIS, ErroUsuario, criar_usuario, desativar_2fa, trocar_senha
 from propagandas.backup import criar_backup, restaurar_backup
 from propagandas.planos import MB
@@ -62,6 +62,7 @@ def main(argumentos=None):
     restaurar.add_argument("arquivo")
 
     args = parser.parse_args(argumentos)
+    arquivo_config.carregar()  # configuracao.env, se existir
     app = create_app()
 
     with app.app_context():

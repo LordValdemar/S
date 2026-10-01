@@ -46,6 +46,8 @@ Serve para **usar nas suas lojas** e para **vender como serviço**: cada cliente
 
 Precisa do **Python 3.10 ou mais novo** ([python.org](https://www.python.org/downloads/)).
 
+> **Guias passo a passo:** [instalação na loja (local)](docs/INSTALACAO-LOCAL.md), incluindo Raspberry Pi na TV, Windows e acesso de fora; e [hospedagem numa VPS](docs/HOSPEDAGEM.md), para vender.
+
 ### Servidor na internet (VPS), para vender
 
 Siga o guia **[docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md)**: HTTPS automático, firewall, atualizações de segurança, cobrança pelo Asaas e backup externo. Resumo:
@@ -236,6 +238,8 @@ Os backups ficam no mesmo disco. Para proteção contra defeito no computador, c
 
 ## Configurações (variáveis de ambiente)
 
+Defina como variáveis de ambiente **ou** no arquivo `configuracao.env` na pasta do painel (copie de `configuracao.env.exemplo`). As variáveis de ambiente têm prioridade sobre o arquivo.
+
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `PORTA` | `5000` | Porta do servidor |
@@ -313,6 +317,9 @@ propagandas/
 deploy/                  # serviço systemd, instalador, Windows, quiosque, Caddy
 deploy/vps/              # instalação em VPS: instalador, atualização, administração, backup externo
 docs/HOSPEDAGEM.md       # guia de hospedagem com HTTPS
+docs/INSTALACAO-LOCAL.md # guia de instalação na loja (Windows, Raspberry Pi, TVs, acesso de fora)
+deploy/raspberry/        # transforma um Raspberry Pi no player de uma TV
+configuracao.env.exemplo # modelo do arquivo de configuração (copie para configuracao.env)
 Dockerfile, docker-compose.yml
 .github/workflows/       # testes automáticos no GitHub
 tests/                   # testes automáticos (pytest)
