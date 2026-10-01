@@ -6,8 +6,6 @@ import os
 import shutil
 import sqlite3
 import tempfile
-import threading
-import time
 import zipfile
 from datetime import datetime
 
@@ -100,29 +98,9 @@ def restaurar_backup(config, caminho_zip):
     return guardados
 
 
-def _fez_backup_hoje(config):
+def fez_backup_hoje(config):
     hoje = f"backup-{datetime.now():%Y%m%d}-"
     return any(
         os.path.basename(c).startswith(hoje)
         for c in glob.glob(os.path.join(config["PASTA_BACKUPS"], "backup-*.zip"))
     )
-
-
-def iniciar_backup_automatico(config, intervalo=3600):
-    """Verifica de hora em hora e faz um backup por dia, em segundo plano."""
-    if config["BACKUP_MANTER"] <= 0:
-        log.info("Backup automático desligado (BACKUP_MANTER=0)")
-        return None
-
-    def rodar():
-        while True:
-            try:
-                if not _fez_backup_hoje(config):
-                    criar_backup(config)
-            except Exception:
-                log.exception("Falha no backup automático")
-            time.sleep(intervalo)
-
-    linha = threading.Thread(target=rodar, name="backup-automatico", daemon=True)
-    linha.start()
-    return linha

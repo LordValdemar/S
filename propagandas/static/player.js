@@ -4,21 +4,36 @@ const tela = document.getElementById("tela");
 const aviso = document.getElementById("aviso");
 const letreiro = document.getElementById("letreiro");
 
+const URL_PLAYLIST = document.body.dataset.api;
+const URL_PULSO = document.body.dataset.pulso;   // vazio no player geral (/player)
+const CHAVE_PENDENTES = "exibicoes-pendentes:" + URL_PULSO;
+const MAX_PENDENTES = 20000;                     // ~2 dias de exibições sem rede
+const INTERVALO_PULSO = 60 * 1000;
+const INICIO = Date.now();
+const UM_DIA = 24 * 60 * 60 * 1000;
+
 let itens = [];        // última lista recebida (usada se o servidor cair)
 let posicao = -1;
 let textoLetreiro = null;
 let temporizador = null;
 let rodada = 0;        // evita que duas trocas aconteçam ao mesmo tempo
+let atual = null;      // { id, inicio } da propaganda na tela
+const preCarregados = new Set();
+
+// ---------------------------------------------------------------------------
+// Playlist
+// ---------------------------------------------------------------------------
 
 // Busca a lista atualizada antes de cada propaganda. Assim, mudanças
 // feitas no painel aparecem sem precisar recarregar a tela.
 async function atualizarLista() {
   try {
-    const resposta = await fetch(document.body.dataset.api, { cache: "no-store" });
+    const resposta = await fetch(URL_PLAYLIST, { cache: "no-store" });
     if (!resposta.ok) throw new Error("HTTP " + resposta.status);
     const dados = await resposta.json();
     itens = dados.itens;
     mostrarLetreiro(dados.letreiro);
+    preCarregar(itens);
     return true;
   } catch (erro) {
     console.warn("Sem conexão com o servidor, usando a lista anterior.", erro);
@@ -26,10 +41,18 @@ async function atualizarLista() {
   }
 }
 
-// Telas que ficam ligadas por semanas: recarrega a página uma vez por dia
-// (só quando o servidor responde) para receber atualizações e liberar memória.
-const INICIO = Date.now();
-const UM_DIA = 24 * 60 * 60 * 1000;
+// Baixa as mídias com antecedência (uma de cada vez) para a troca ser
+// instantânea e para continuar exibindo se a rede cair.
+let filaPreCarga = Promise.resolve();
+function preCarregar(lista) {
+  for (const item of lista) {
+    if (preCarregados.has(item.url)) continue;
+    preCarregados.add(item.url);
+    filaPreCarga = filaPreCarga
+      .then(() => fetch(item.url).then(r => r.blob()))
+      .catch(() => preCarregados.delete(item.url));
+  }
+}
 
 function mostrarLetreiro(texto) {
   if (texto === textoLetreiro) return;
@@ -41,20 +64,76 @@ function mostrarLetreiro(texto) {
   span.style.animationDuration = Math.max(10, texto.length * 0.25) + "s";
 }
 
+// ---------------------------------------------------------------------------
+// Registro de exibições (relatórios) e sinal de vida (monitoramento)
+// ---------------------------------------------------------------------------
+
+function lerPendentes() {
+  try {
+    return JSON.parse(localStorage.getItem(CHAVE_PENDENTES)) || [];
+  } catch (erro) {
+    return [];
+  }
+}
+
+function gravarPendentes(lista) {
+  try {
+    localStorage.setItem(CHAVE_PENDENTES, JSON.stringify(lista.slice(-MAX_PENDENTES)));
+  } catch (erro) {
+    console.warn("Não foi possível guardar as exibições pendentes.", erro);
+  }
+}
+
+function encerrarExibicaoAtual() {
+  if (!atual || !URL_PULSO) return;
+  const duracao = (Date.now() - atual.inicio) / 1000;
+  if (duracao >= 1) {
+    const pendentes = lerPendentes();
+    pendentes.push({ propaganda_id: atual.id, inicio: new Date(atual.inicio).toISOString(), duracao: duracao });
+    gravarPendentes(pendentes);
+  }
+  atual = null;
+}
+
+async function enviarPulso() {
+  if (!URL_PULSO) return;
+  const lote = lerPendentes().slice(0, 1000);
+  try {
+    const resposta = await fetch(URL_PULSO, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exibindo: atual ? atual.id : null, exibicoes: lote }),
+    });
+    if (!resposta.ok) throw new Error("HTTP " + resposta.status);
+    // Remove só o que foi enviado (novas exibições podem ter entrado enquanto isso).
+    gravarPendentes(lerPendentes().slice(lote.length));
+  } catch (erro) {
+    console.warn("Pulso não enviado; tentará de novo.", erro);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exibição
+// ---------------------------------------------------------------------------
+
 async function proxima() {
   clearTimeout(temporizador);
+  encerrarExibicaoAtual();
   const minha = ++rodada;
   const seguir = () => { if (minha === rodada) proxima(); };
   const conectado = await atualizarLista();
   if (minha !== rodada) return;
+  // Telas que ficam ligadas por semanas: recarrega a página uma vez por dia
+  // (só quando o servidor responde) para receber atualizações e liberar memória.
   if (conectado && Date.now() - INICIO > UM_DIA) {
+    await enviarPulso();
     location.reload();
     return;
   }
 
   if (itens.length === 0) {
     tela.innerHTML = "";
-    aviso.textContent = "Nenhuma propaganda no ar. Cadastre pelo painel.";
+    aviso.textContent = "Nenhuma propaganda no ar nesta tela.";
     aviso.style.display = "flex";
     temporizador = setTimeout(seguir, 10000);
     return;
@@ -69,22 +148,27 @@ async function proxima() {
   if (minha !== rodada) return;
   tela.innerHTML = "";
 
+  const comecou = () => { if (minha === rodada) atual = { id: item.id, inicio: Date.now() }; };
+  const falhou = () => { atual = null; seguir(); };   // não conta como exibida
+
   if (item.tipo === "video") {
     const video = document.createElement("video");
     video.src = item.url;
     video.autoplay = true;
     video.playsInline = true;
+    video.onplaying = () => { if (!atual) comecou(); };
     video.onended = seguir;
-    video.onerror = seguir;
+    video.onerror = falhou;
     tela.appendChild(video);
     // Tenta tocar com som; se o navegador bloquear, toca sem som.
-    video.play().catch(() => { video.muted = true; video.play().catch(seguir); });
+    video.play().catch(() => { video.muted = true; video.play().catch(falhou); });
     // Segurança: se o vídeo travar, pula após 10 minutos.
     temporizador = setTimeout(seguir, 10 * 60 * 1000);
   } else {
     const img = document.createElement("img");
+    img.onload = comecou;
+    img.onerror = falhou;
     img.src = item.url;
-    img.onerror = seguir;
     tela.appendChild(img);
     temporizador = setTimeout(seguir, item.duracao * 1000);
   }
@@ -98,4 +182,10 @@ function telaCheia() {
 document.addEventListener("click", telaCheia);
 document.addEventListener("keydown", e => { if (e.key === "f" || e.key === "F") telaCheia(); });
 
+if (URL_PULSO) {
+  enviarPulso();
+  setInterval(enviarPulso, INTERVALO_PULSO);
+  // Guarda a exibição em andamento se a página for fechada ou recarregada.
+  window.addEventListener("pagehide", encerrarExibicaoAtual);
+}
 proxima();

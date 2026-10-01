@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block titulo %}Telas{% endblock %}
+{% block conteudo %}
+{% if offline %}
+  <div class="aviso erro">⚠️ {{ offline }} tela(s) sem comunicação. Verifique se a TV está ligada e conectada à rede.</div>
+{% endif %}
+
+<section>
+  <h2>Cadastrar tela</h2>
+  <form action="{{ url_for('telas.nova') }}" method="post" class="linha">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="flex:2"><label for="nome-tela">Nome</label><input type="text" id="nome-tela" name="nome" required maxlength="100" placeholder="Ex.: Loja Centro: Balcão"></div>
+    <div>
+      <label for="grupo-tela">Grupo</label>
+      <select id="grupo-tela" name="grupo_id">
+        <option value="">Sem grupo</option>
+        {% for gr in grupos %}<option value="{{ gr.id }}">{{ gr.nome }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="flex:0"><button type="submit">Cadastrar</button></div>
+  </form>
+  <p class="dica" style="margin-bottom:0">Cada tela recebe um endereço próprio. Abra esse endereço no navegador da TV. O painel passa a mostrar se ela está ligada, o que está exibindo e quantas vezes cada propaganda passou.</p>
+</section>
+
+<section>
+  <h2>Telas ({{ telas|length }})</h2>
+  {% if not telas %}<p class="dica">Nenhuma tela cadastrada.</p>{% endif %}
+  {% for t in telas %}
+    {% set endereco = url_for('exibicao.tela', codigo=t.codigo, _external=True) %}
+    <div class="tela">
+      <div class="linha" style="align-items:center; justify-content:space-between">
+        <div style="flex:2">
+          <strong>{{ t.nome }}</strong>
+          {% if t.grupo_nome %}<span class="selo">{{ t.grupo_nome }}</span>{% endif %}
+        </div>
+        <div style="flex:3; text-align:right">
+          {% if not t.ultimo_contato %}
+            <span class="status">Nunca conectou</span>
+          {% elif online[t.id] %}
+            <span class="status online">Online</span>
+          {% else %}
+            <span class="status offline">Offline</span>
+          {% endif %}
+          <span class="dica">· último contato {{ t.ultimo_contato|tempo_desde }}</span>
+        </div>
+      </div>
+      <div class="resumo">
+        {% if t.exibindo and online[t.id] %}▶ Exibindo agora: <strong>{{ t.exibindo }}</strong> · {% endif %}
+        {% if t.ultimo_ip %}IP {{ t.ultimo_ip }}{% endif %}
+      </div>
+      <p class="endereco">{{ endereco }}</p>
+      <details>
+        <summary>Editar</summary>
+        <form action="{{ url_for('telas.atualizar', tela_id=t.id) }}" method="post" style="margin-top:8px">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="linha">
+            <div style="flex:2"><label>Nome</label><input type="text" name="nome" value="{{ t.nome }}" maxlength="100"></div>
+            <div>
+              <label>Grupo</label>
+              <select name="grupo_id">
+                <option value="">Sem grupo</option>
+                {% for gr in grupos %}<option value="{{ gr.id }}" {% if gr.id == t.grupo_id %}selected{% endif %}>{{ gr.nome }}</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="campo" style="margin-top:8px">
+            <label>Letreiro próprio (em branco = usa o geral{% if letreiro_geral %}: “{{ letreiro_geral|truncate(40) }}”{% endif %})</label>
+            <input type="text" name="letreiro" value="{{ t.letreiro or '' }}" maxlength="500">
+          </div>
+          <button type="submit">Salvar</button>
+        </form>
+        <div class="acoes">
+          <form action="{{ url_for('telas.trocar_codigo', tela_id=t.id) }}" method="post" data-confirmar="Gerar um novo endereço? O endereço atual vai parar de funcionar e você terá que atualizar a TV.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="secundario">Gerar novo endereço</button>
+          </form>
+          <form action="{{ url_for('telas.excluir', tela_id=t.id) }}" method="post" data-confirmar="Excluir a tela {{ t.nome }}?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="perigo">Excluir tela</button>
+          </form>
+        </div>
+      </details>
+    </div>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Grupos</h2>
+  <p class="dica">Agrupe telas (ex.: “Lojas de SP”, “Caixas”) para enviar propagandas a todas de uma vez.</p>
+  <form action="{{ url_for('telas.novo_grupo') }}" method="post" class="linha">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="flex:3"><input type="text" name="nome" required maxlength="100" placeholder="Nome do grupo" aria-label="Nome do grupo"></div>
+    <div style="flex:0"><button type="submit">Criar grupo</button></div>
+  </form>
+  {% if grupos %}
+    <table style="margin-top:12px">
+      <tbody>
+        {% for gr in grupos %}
+          <tr>
+            <td>{{ gr.nome }}</td>
+            <td class="dica">{{ gr.total }} tela(s)</td>
+            <td style="text-align:right">
+              <form action="{{ url_for('telas.excluir_grupo', grupo_id=gr.id) }}" method="post" data-confirmar="Excluir o grupo {{ gr.nome }}? As telas continuam cadastradas, só ficam sem grupo.">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="perigo">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Alertas de tela offline</h2>
+  {% if canais %}
+    <p>Alertas ativos por: <strong>{{ canais|join(' e ') }}</strong>. Você é avisado quando uma tela fica mais de {{ config.ALERTA_OFFLINE_MIN }} minutos sem comunicação e quando ela volta.</p>
+  {% else %}
+    <p class="dica">Nenhum canal configurado. Configure e-mail ou webhook (Slack, Teams, Discord…) pelas variáveis de ambiente descritas no README, na seção “Alertas”.</p>
+  {% endif %}
+  <form action="{{ url_for('telas.testar_alerta') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="secundario" {% if not canais %}disabled{% endif %}>Enviar alerta de teste</button>
+  </form>
+</section>
+{% endblock %}

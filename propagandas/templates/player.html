@@ -15,7 +15,7 @@
     @keyframes rolar { from { transform: translateX(0); } to { transform: translateX(-100%); } }
   </style>
 </head>
-<body data-api="{{ url_for('exibicao.playlist') }}">
+<body data-api="{{ api }}" data-pulso="{{ pulso }}">
   <div id="tela"></div>
   <div id="aviso">Carregando…</div>
   <div id="letreiro"><span></span></div>

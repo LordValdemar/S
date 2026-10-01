@@ -14,6 +14,10 @@
       <nav>
         <a href="{{ url_for('painel.lista') }}" {% if request.endpoint == 'painel.lista' %}class="atual"{% endif %}>Propagandas</a>
         {% if g.usuario.papel == 'admin' %}
+          <a href="{{ url_for('telas.lista') }}" {% if request.endpoint == 'telas.lista' %}class="atual"{% endif %}>Telas</a>
+        {% endif %}
+        <a href="{{ url_for('relatorios.resumo') }}" {% if request.endpoint == 'relatorios.resumo' %}class="atual"{% endif %}>Relatórios</a>
+        {% if g.usuario.papel == 'admin' %}
           <a href="{{ url_for('auth.usuarios') }}" {% if request.endpoint == 'auth.usuarios' %}class="atual"{% endif %}>Usuários</a>
         {% endif %}
         <a href="{{ url_for('auth.minha_senha') }}" {% if request.endpoint == 'auth.minha_senha' %}class="atual"{% endif %}>Minha senha</a>
@@ -21,7 +25,6 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit">Sair ({{ g.usuario.usuario }})</button>
         </form>
-        <a class="destaque" href="{{ url_for('exibicao.player') }}" target="_blank" rel="noopener">Abrir tela de exibição</a>
       </nav>
     {% endif %}
   </header>

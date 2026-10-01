@@ -1,0 +1,40 @@
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Verificação de estilo e erros (ruff)
+        run: ruff check .
+      - name: Testes automáticos
+        run: python -m pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Monta a imagem Docker
+        run: docker build -t painel-propagandas .
+      - name: Sobe o container e confere a saúde
+        run: |
+          docker run -d --name painel -p 5000:5000 painel-propagandas
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:5000/saude && exit 0
+            sleep 1
+          done
+          docker logs painel
+          exit 1

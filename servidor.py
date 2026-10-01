@@ -1,6 +1,9 @@
 """
 Inicia o Painel de Propagandas em modo de produção (servidor Waitress).
 
+Também inicia as tarefas em segundo plano (monitoramento das telas,
+alertas, backup diário e limpeza dos relatórios antigos).
+
     python servidor.py
 
 Para desenvolvimento, com recarga automática:
@@ -14,12 +17,12 @@ import os
 from waitress import serve
 
 from propagandas import create_app
-from propagandas.backup import iniciar_backup_automatico
+from propagandas.tarefas import iniciar_tarefas
 
 
 def main():
     app = create_app()
-    iniciar_backup_automatico(app.config)
+    iniciar_tarefas(app)  # monitoramento das telas, backup diário e limpeza
 
     host = os.environ.get("HOST", "0.0.0.0")
     porta = int(os.environ.get("PORTA", 5000))

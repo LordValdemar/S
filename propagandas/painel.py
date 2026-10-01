@@ -3,7 +3,7 @@
 import logging
 import os
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from flask import (
     Blueprint,
@@ -17,7 +17,7 @@ from flask import (
     url_for,
 )
 
-from . import db
+from . import agenda, db
 from .auth import login_obrigatorio
 from .midia import EXTENSOES, detectar_tipo, extensao_de
 
@@ -25,18 +25,6 @@ bp = Blueprint("painel", __name__)
 log = logging.getLogger("propagandas.painel")
 
 DURACAO_PADRAO = 10
-
-
-def esta_no_ar(item, hoje=None):
-    """Diz se a propaganda deve aparecer hoje (ativa e dentro do período)."""
-    hoje = (hoje or date.today()).isoformat()
-    if not item["ativo"]:
-        return False
-    if item["inicio"] and hoje < item["inicio"]:
-        return False
-    if item["fim"] and hoje > item["fim"]:
-        return False
-    return True
 
 
 def ler_duracao(valor):
@@ -57,6 +45,40 @@ def ler_data(valor):
         return None
 
 
+def ler_hora(valor):
+    """Aceita HH:MM; qualquer outra coisa vira vazio."""
+    valor = (valor or "").strip()
+    if not valor:
+        return None
+    try:
+        return datetime.strptime(valor, "%H:%M").strftime("%H:%M")
+    except ValueError:
+        return None
+
+
+def destinos_por_propaganda(conexao):
+    """{propaganda_id: {"telas": {ids}, "grupos": {ids}, "nomes": [..]}}"""
+    resultado = {}
+    linhas = conexao.execute(
+        """
+        SELECT d.propaganda_id, d.tela_id, d.grupo_id, t.nome AS tela_nome, gr.nome AS grupo_nome
+        FROM propaganda_destinos d
+        LEFT JOIN telas t ON t.id = d.tela_id
+        LEFT JOIN grupos gr ON gr.id = d.grupo_id
+        ORDER BY gr.nome, t.nome
+        """
+    )
+    for linha in linhas:
+        destino = resultado.setdefault(linha["propaganda_id"], {"telas": set(), "grupos": set(), "nomes": []})
+        if linha["grupo_id"]:
+            destino["grupos"].add(linha["grupo_id"])
+            destino["nomes"].append("Grupo " + linha["grupo_nome"])
+        else:
+            destino["telas"].add(linha["tela_id"])
+            destino["nomes"].append(linha["tela_nome"])
+    return resultado
+
+
 def buscar(conexao, propaganda_id):
     item = conexao.execute("SELECT * FROM propagandas WHERE id = ?", (propaganda_id,)).fetchone()
     if item is None:
@@ -69,11 +91,16 @@ def buscar(conexao, propaganda_id):
 def lista():
     conexao = db.obter()
     itens = conexao.execute("SELECT * FROM propagandas ORDER BY posicao, id").fetchall()
-    no_ar = {item["id"]: esta_no_ar(item) for item in itens}
+    agora = agenda.agora_local()
     return render_template(
         "propagandas.html",
         itens=itens,
-        no_ar=no_ar,
+        situacoes={item["id"]: agenda.situacao(item, agora) for item in itens},
+        destinos=destinos_por_propaganda(conexao),
+        telas=conexao.execute("SELECT id, nome FROM telas ORDER BY nome").fetchall(),
+        grupos=conexao.execute("SELECT id, nome FROM grupos ORDER BY nome").fetchall(),
+        dias=agenda.DIAS,
+        agenda=agenda,
         letreiro=db.ler_config("letreiro"),
         extensoes=", ".join(sorted(e.upper() for e in EXTENSOES)),
     )
@@ -127,24 +154,64 @@ def enviar():
 def atualizar(propaganda_id):
     conexao = db.obter()
     item = buscar(conexao, propaganda_id)
-    nome = request.form.get("nome", "").strip()[:200] or item["nome"]
-    inicio = ler_data(request.form.get("inicio"))
-    fim = ler_data(request.form.get("fim"))
+    formulario = request.form
+    nome = formulario.get("nome", "").strip()[:200] or item["nome"]
+    inicio = ler_data(formulario.get("inicio"))
+    fim = ler_data(formulario.get("fim"))
+    hora_inicio = ler_hora(formulario.get("hora_inicio"))
+    hora_fim = ler_hora(formulario.get("hora_fim"))
+    dias = "".join(d for d in agenda.TODOS_OS_DIAS if d in formulario.getlist("dias"))
+    para_todas = formulario.get("destino", "todas") == "todas"
+
+    ids_telas = {r["id"] for r in conexao.execute("SELECT id FROM telas")}
+    ids_grupos = {r["id"] for r in conexao.execute("SELECT id FROM grupos")}
+    telas_escolhidas = {int(v) for v in formulario.getlist("telas") if v.isdigit()} & ids_telas
+    grupos_escolhidos = {int(v) for v in formulario.getlist("grupos") if v.isdigit()} & ids_grupos
+
+    erro = None
     if inicio and fim and fim < inicio:
-        flash("A data de término não pode ser antes da data de início.", "erro")
+        erro = "A data de término não pode ser antes da data de início."
+    elif not dias:
+        erro = "Escolha pelo menos um dia da semana."
+    elif hora_inicio and hora_fim and hora_inicio == hora_fim:
+        erro = "O horário de início e de fim não podem ser iguais."
+    elif not para_todas and not telas_escolhidas and not grupos_escolhidos:
+        erro = "Escolha pelo menos uma tela ou grupo (ou marque “Todas as telas”)."
+    if erro:
+        flash(f"“{item['nome']}”: {erro}", "erro")
         return redirect(url_for("painel.lista"))
+
     with conexao:
         conexao.execute(
-            "UPDATE propagandas SET nome = ?, duracao = ?, ativo = ?, inicio = ?, fim = ? WHERE id = ?",
+            """
+            UPDATE propagandas
+            SET nome = ?, duracao = ?, ativo = ?, inicio = ?, fim = ?,
+                dias_semana = ?, hora_inicio = ?, hora_fim = ?, para_todas = ?
+            WHERE id = ?
+            """,
             (
                 nome,
-                ler_duracao(request.form.get("duracao")),
-                1 if request.form.get("ativo") == "on" else 0,
+                ler_duracao(formulario.get("duracao")),
+                1 if formulario.get("ativo") == "on" else 0,
                 inicio,
                 fim,
+                dias,
+                hora_inicio,
+                hora_fim,
+                1 if para_todas else 0,
                 propaganda_id,
             ),
         )
+        conexao.execute("DELETE FROM propaganda_destinos WHERE propaganda_id = ?", (propaganda_id,))
+        if not para_todas:
+            conexao.executemany(
+                "INSERT INTO propaganda_destinos (propaganda_id, tela_id) VALUES (?, ?)",
+                [(propaganda_id, t) for t in sorted(telas_escolhidas)],
+            )
+            conexao.executemany(
+                "INSERT INTO propaganda_destinos (propaganda_id, grupo_id) VALUES (?, ?)",
+                [(propaganda_id, gr) for gr in sorted(grupos_escolhidos)],
+            )
     log.info("“%s” alterou a propaganda “%s”", g.usuario["usuario"], nome)
     flash("Alterações salvas.", "ok")
     return redirect(url_for("painel.lista"))

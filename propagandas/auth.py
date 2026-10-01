@@ -10,6 +10,7 @@ from functools import wraps
 from flask import (
     Blueprint,
     abort,
+    current_app,
     flash,
     g,
     redirect,
@@ -122,8 +123,17 @@ def _carregar_usuario():
         session.clear()
 
 
+def csrf_isento(funcao):
+    """Para rotas chamadas pelas TVs, que se identificam pelo código da tela."""
+    funcao.csrf_isento = True
+    return funcao
+
+
 def _verificar_csrf():
     if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    rota = current_app.view_functions.get(request.endpoint)
+    if getattr(rota, "csrf_isento", False):
         return
     enviado = request.form.get("csrf_token", "")
     esperado = session.get("csrf", "")

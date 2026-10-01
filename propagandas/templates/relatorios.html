@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titulo %}Relatórios{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>Relatório de exibições</h2>
+  <form method="get" class="linha">
+    <div><label for="de">De</label><input type="date" id="de" name="de" value="{{ de.isoformat() }}"></div>
+    <div><label for="ate">Até</label><input type="date" id="ate" name="ate" value="{{ ate.isoformat() }}"></div>
+    <div>
+      <label for="tela">Tela</label>
+      <select id="tela" name="tela">
+        <option value="">Todas</option>
+        {% for t in telas %}<option value="{{ t.id }}" {% if t.id == tela_id %}selected{% endif %}>{{ t.nome }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="flex:0"><button type="submit">Filtrar</button></div>
+    <div style="flex:0">
+      <a class="botao secundario" href="{{ url_for('relatorios.exportar', de=de.isoformat(), ate=ate.isoformat(), tela=tela_id or '') }}">Baixar CSV (Excel)</a>
+    </div>
+  </form>
+</section>
+
+<div class="cartoes">
+  <div class="cartao"><div class="valor">{{ "{:,}".format(total_exibicoes).replace(",", ".") }}</div><div class="rotulo">exibições no período</div></div>
+  <div class="cartao"><div class="valor">{{ total_tempo|duracao }}</div><div class="rotulo">tempo total em tela</div></div>
+  <div class="cartao"><div class="valor">{{ por_propaganda|length }}</div><div class="rotulo">propagandas exibidas</div></div>
+  <div class="cartao"><div class="valor">{{ por_tela|length }}</div><div class="rotulo">telas com exibição</div></div>
+</div>
+
+<section>
+  <h2>Por propaganda</h2>
+  {% if not por_propaganda %}
+    <p class="dica">Nenhuma exibição registrada no período. Só as telas cadastradas (em <strong>Telas</strong>) registram exibições. O player geral <code>/player</code> não registra.</p>
+  {% else %}
+    <div class="tabela-rolagem">
+      <table>
+        <thead><tr><th>Propaganda</th><th class="numero">Exibições</th><th class="numero">Tempo total</th><th class="numero">Telas</th></tr></thead>
+        <tbody>
+          {% for linha in por_propaganda %}
+            <tr>
+              <td>{{ linha.nome }}{% if linha.excluida %} <span class="selo">excluída</span>{% endif %}</td>
+              <td class="numero">{{ linha.exibicoes }}</td>
+              <td class="numero">{{ linha.tempo|duracao }}</td>
+              <td class="numero">{{ linha.telas }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+
+{% if por_tela %}
+<section>
+  <h2>Por tela</h2>
+  <div class="tabela-rolagem">
+    <table>
+      <thead><tr><th>Tela</th><th class="numero">Exibições</th><th class="numero">Tempo total</th></tr></thead>
+      <tbody>
+        {% for linha in por_tela %}
+          <tr><td>{{ linha.nome }}</td><td class="numero">{{ linha.exibicoes }}</td><td class="numero">{{ linha.tempo|duracao }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

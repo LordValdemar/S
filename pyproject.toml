@@ -1,0 +1,12 @@
+[project]
+name = "painel-propagandas"
+version = "2.0.0"
+description = "Sinalização digital para estabelecimentos comerciais"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 130
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

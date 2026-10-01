@@ -37,6 +37,53 @@ MIGRACOES = [
         valor  TEXT NOT NULL
     );
     """,
+    # 2 - telas, grupos, agendamento e relatório de exibições
+    """
+    CREATE TABLE grupos (
+        id    INTEGER PRIMARY KEY,
+        nome  TEXT NOT NULL UNIQUE COLLATE NOCASE
+    );
+
+    CREATE TABLE telas (
+        id              INTEGER PRIMARY KEY,
+        nome            TEXT    NOT NULL,
+        codigo          TEXT    NOT NULL UNIQUE,
+        grupo_id        INTEGER REFERENCES grupos(id) ON DELETE SET NULL,
+        letreiro        TEXT,                 -- NULL = usa o letreiro geral
+        ultimo_contato  TEXT,                 -- UTC
+        ultimo_ip       TEXT,
+        navegador       TEXT,
+        exibindo        TEXT,
+        alerta_offline  INTEGER NOT NULL DEFAULT 0,
+        criado_em       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    ALTER TABLE propagandas ADD COLUMN dias_semana TEXT NOT NULL DEFAULT '0123456';
+    ALTER TABLE propagandas ADD COLUMN hora_inicio TEXT;
+    ALTER TABLE propagandas ADD COLUMN hora_fim TEXT;
+    ALTER TABLE propagandas ADD COLUMN para_todas INTEGER NOT NULL DEFAULT 1;
+
+    CREATE TABLE propaganda_destinos (
+        propaganda_id  INTEGER NOT NULL REFERENCES propagandas(id) ON DELETE CASCADE,
+        tela_id        INTEGER REFERENCES telas(id) ON DELETE CASCADE,
+        grupo_id       INTEGER REFERENCES grupos(id) ON DELETE CASCADE,
+        CHECK ((tela_id IS NULL) <> (grupo_id IS NULL))
+    );
+    CREATE INDEX destinos_propaganda ON propaganda_destinos(propaganda_id);
+
+    -- Sem chave estrangeira para propaganda: o relatório continua valendo
+    -- mesmo depois que a propaganda é excluída.
+    CREATE TABLE exibicoes (
+        id               INTEGER PRIMARY KEY,
+        tela_id          INTEGER REFERENCES telas(id) ON DELETE SET NULL,
+        propaganda_id    INTEGER NOT NULL,
+        propaganda_nome  TEXT    NOT NULL,
+        exibido_em       TEXT    NOT NULL,    -- UTC
+        duracao          REAL    NOT NULL,
+        UNIQUE (tela_id, propaganda_id, exibido_em)
+    );
+    CREATE INDEX exibicoes_data ON exibicoes(exibido_em);
+    """,
 ]
 
 

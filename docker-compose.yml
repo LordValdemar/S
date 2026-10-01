@@ -1,0 +1,18 @@
+# Uso:  docker compose up -d
+# Comandos de administração:  docker compose exec painel python gerenciar.py listar-usuarios
+services:
+  painel:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./dados:/dados
+    environment:
+      FUSO_HORARIO: America/Sao_Paulo
+      # Alertas (opcional), veja o README:
+      # ALERTA_WEBHOOK: https://hooks.slack.com/services/...
+      # SMTP_HOST: smtp.gmail.com
+      # SMTP_USUARIO: voce@gmail.com
+      # SMTP_SENHA: senha-de-app
+      # ALERTA_EMAILS: dono@loja.com.br,gerente@loja.com.br

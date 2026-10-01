@@ -1,6 +1,7 @@
 # Abre a tela de exibição em tela cheia quando a sessão gráfica inicia.
 # Copie para ~/.config/autostart/ no computador ligado à TV (ex.: Raspberry Pi).
-# Se o servidor estiver em outro computador, troque "localhost" pelo IP dele.
+# Troque http://localhost:5000/player (nas duas ocorrências) pelo endereço da tela,
+# visto no painel em "Telas" (ex.: http://192.168.0.10:5000/tela/Ab3dE5fG7hJk).
 [Desktop Entry]
 Type=Application
 Name=Painel de Propagandas - Exibição

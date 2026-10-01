@@ -1,10 +1,7 @@
 import os
-from datetime import date
-
 from conftest import JPEG, MP4, PNG, enviar, postar
 
 from propagandas import db
-from propagandas.painel import esta_no_ar
 
 
 def itens_no_ar(cliente):
@@ -51,7 +48,7 @@ def test_editar_mover_e_excluir(logado):
     assert ids(logado) == [b, a]
 
     # Desmarcar "ativo" tira do ar
-    postar(logado, f"/propaganda/{a}/atualizar", {"nome": "A", "duracao": "5"})
+    postar(logado, f"/propaganda/{a}/atualizar", {"nome": "A", "duracao": "5", "dias": list("0123456")})
     assert [i["id"] for i in itens_no_ar(logado)] == [b]
 
     arquivo_b = itens_no_ar(logado)[0]["url"].rsplit("/", 1)[-1]
@@ -64,22 +61,13 @@ def test_datas_invalidas(logado):
     enviar(logado, "a.png", PNG)
     (a,) = ids(logado)
     resposta = postar(logado, f"/propaganda/{a}/atualizar",
-                      {"nome": "A", "duracao": "5", "ativo": "on", "inicio": "2026-10-10", "fim": "2026-10-01"})
+                      {"nome": "A", "duracao": "5", "ativo": "on", "dias": list("0123456"), "inicio": "2026-10-10", "fim": "2026-10-01"})
     assert "término não pode ser antes" in logado.get(resposta.headers["Location"]).get_data(as_text=True)
     postar(logado, f"/propaganda/{a}/atualizar",
-           {"nome": "A", "duracao": "99999", "ativo": "on", "inicio": "lixo", "fim": ""})
+           {"nome": "A", "duracao": "99999", "ativo": "on", "dias": list("0123456"), "inicio": "lixo", "fim": ""})
     with logado.application.app_context():
         linha = db.obter().execute("SELECT * FROM propagandas").fetchone()
     assert linha["inicio"] is None and linha["duracao"] == 3600
-
-
-def test_periodo_de_validade():
-    hoje = date(2026, 10, 1)
-    assert esta_no_ar({"ativo": 1, "inicio": "2026-09-01", "fim": "2026-10-31"}, hoje)
-    assert esta_no_ar({"ativo": 1, "inicio": None, "fim": None}, hoje)
-    assert not esta_no_ar({"ativo": 1, "inicio": "2026-10-02", "fim": None}, hoje)
-    assert not esta_no_ar({"ativo": 1, "inicio": None, "fim": "2026-09-30"}, hoje)
-    assert not esta_no_ar({"ativo": 0, "inicio": None, "fim": None}, hoje)
 
 
 def test_letreiro(logado):

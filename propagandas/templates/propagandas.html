@@ -45,7 +45,8 @@
           <img class="miniatura" src="{{ url }}" alt="">
         {% endif %}
         <div style="margin-top:6px">
-          {% if no_ar[item.id] %}<span class="selo no-ar">No ar</span>{% else %}<span class="selo fora">Fora do ar</span>{% endif %}
+          {% set codigo, texto = situacoes[item.id] %}
+          <span class="selo {{ 'no-ar' if codigo == 'no_ar' else 'fora' }}">{{ texto }}</span>
           <span class="selo">{{ 'Vídeo' if item.tipo == 'video' else 'Imagem' }}</span>
         </div>
       </div>
@@ -55,7 +56,7 @@
           <div class="linha">
             <div style="flex:2"><label>Nome</label><input type="text" name="nome" value="{{ item.nome }}" maxlength="200"></div>
             <div>
-              <label>{{ 'Tempo máx. (s), o vídeo toca até o fim' if item.tipo == 'video' else 'Tempo na tela (s)' }}</label>
+              <label>{{ 'Tempo (s): o vídeo sempre toca até o fim' if item.tipo == 'video' else 'Tempo na tela (s)' }}</label>
               <input type="number" name="duracao" value="{{ item.duracao }}" min="1" max="3600">
             </div>
           </div>
@@ -64,6 +65,47 @@
             <div><label>Termina em (opcional)</label><input type="date" name="fim" value="{{ item.fim or '' }}"></div>
             <div><label><input type="checkbox" name="ativo" {% if item.ativo %}checked{% endif %}> Ativo</label></div>
           </div>
+          {% set destino = destinos.get(item.id, {"telas": [], "grupos": [], "nomes": []}) %}
+          <div class="resumo">
+            🗓 {{ agenda.resumo_dias(item.dias_semana) }}, {{ agenda.resumo_horario(item.hora_inicio, item.hora_fim) }}
+            · 📺 {% if item.para_todas %}Todas as telas{% elif destino.nomes %}{{ destino.nomes|join(', ') }}{% else %}<span class="selo alerta">Nenhuma tela: escolha um destino</span>{% endif %}
+          </div>
+          <details>
+            <summary>Agendamento e telas</summary>
+            <label style="margin-top:8px">Dias da semana</label>
+            <div class="opcoes">
+              {% for nome_dia in dias %}
+                <label><input type="checkbox" name="dias" value="{{ loop.index0 }}" {% if loop.index0|string in item.dias_semana %}checked{% endif %}> {{ nome_dia }}</label>
+              {% endfor %}
+            </div>
+            <div class="linha">
+              <div><label>Das (opcional)</label><input type="time" name="hora_inicio" value="{{ item.hora_inicio or '' }}"></div>
+              <div><label>Até (opcional)</label><input type="time" name="hora_fim" value="{{ item.hora_fim or '' }}"></div>
+            </div>
+            <p class="dica" style="margin:6px 0 12px">Ex.: café da manhã das 06:00 às 10:00. Pode virar a noite (22:00 às 02:00).</p>
+            <label>Em quais telas aparece</label>
+            <div class="opcoes">
+              <label><input type="radio" name="destino" value="todas" {% if item.para_todas %}checked{% endif %}> Todas as telas</label>
+              <label><input type="radio" name="destino" value="escolher" {% if not item.para_todas %}checked{% endif %}> Só nas escolhidas abaixo</label>
+            </div>
+            {% if grupos %}
+              <div class="opcoes">
+                {% for gr in grupos %}
+                  <label><input type="checkbox" name="grupos" value="{{ gr.id }}" {% if gr.id in destino.grupos %}checked{% endif %}> Grupo {{ gr.nome }}</label>
+                {% endfor %}
+              </div>
+            {% endif %}
+            {% if telas %}
+              <div class="opcoes">
+                {% for t in telas %}
+                  <label><input type="checkbox" name="telas" value="{{ t.id }}" {% if t.id in destino.telas %}checked{% endif %}> {{ t.nome }}</label>
+                {% endfor %}
+              </div>
+            {% endif %}
+            {% if not telas and not grupos %}
+              <p class="dica">Nenhuma tela cadastrada ainda{% if g.usuario.papel == 'admin' %}: cadastre em <a href="{{ url_for('telas.lista') }}">Telas</a>{% endif %}.</p>
+            {% endif %}
+          </details>
           <div class="acoes"><button type="submit">Salvar</button></div>
         </form>
         <div class="acoes">

@@ -15,7 +15,7 @@ from logging.handlers import RotatingFileHandler
 from flask import Flask, flash, redirect, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import auth, db, exibicao, painel
+from . import agenda, auth, db, exibicao, painel, relatorios, telas
 
 PASTA_PROJETO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -46,6 +46,17 @@ def montar_config(sobrescrever=None):
         "SESSION_COOKIE_NAME": "painel_sessao",
         "PERMANENT_SESSION_LIFETIME": 7 * 24 * 3600,  # 7 dias
         "ATRAS_DE_PROXY": _env_ligado("ATRAS_DE_PROXY"),
+        "FUSO_HORARIO": os.environ.get("FUSO_HORARIO", "America/Sao_Paulo"),
+        "RETER_EXIBICOES_DIAS": int(os.environ.get("RETER_EXIBICOES_DIAS", 365)),
+        # Alertas de tela offline
+        "ALERTA_OFFLINE_MIN": int(os.environ.get("ALERTA_OFFLINE_MIN", 5)),
+        "ALERTA_EMAILS": os.environ.get("ALERTA_EMAILS", ""),
+        "ALERTA_WEBHOOK": os.environ.get("ALERTA_WEBHOOK", ""),
+        "SMTP_HOST": os.environ.get("SMTP_HOST", ""),
+        "SMTP_PORTA": int(os.environ.get("SMTP_PORTA", 587)),
+        "SMTP_USUARIO": os.environ.get("SMTP_USUARIO", ""),
+        "SMTP_SENHA": os.environ.get("SMTP_SENHA", ""),
+        "SMTP_REMETENTE": os.environ.get("SMTP_REMETENTE", ""),
     }
     config.update(sobrescrever)
     return config
@@ -105,6 +116,12 @@ def create_app(sobrescrever=None):
     auth.registrar(app)
     app.register_blueprint(painel.bp)
     app.register_blueprint(exibicao.bp)
+    app.register_blueprint(telas.bp)
+    app.register_blueprint(relatorios.bp)
+
+    app.jinja_env.filters["tempo_desde"] = agenda.tempo_desde
+    app.jinja_env.filters["data_local"] = agenda.local_formatado
+    app.jinja_env.filters["duracao"] = agenda.duracao_formatada
 
     @app.after_request
     def cabecalhos_de_seguranca(resposta):
