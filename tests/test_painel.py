@@ -1,6 +1,6 @@
 import os
-from conftest import JPEG, MP4, PNG, enviar, postar
 
+from conftest import JPEG, MP4, PNG, enviar, postar
 from propagandas import db
 
 

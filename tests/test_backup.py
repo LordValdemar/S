@@ -2,8 +2,8 @@ import os
 import zipfile
 
 import pytest
-from conftest import PNG, enviar, postar
 
+from conftest import PNG, enviar, postar
 from propagandas import backup, db
 
 

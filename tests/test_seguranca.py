@@ -1,5 +1,4 @@
 from conftest import configurar_admin, csrf, postar
-
 from propagandas import auth
 
 

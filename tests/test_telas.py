@@ -4,7 +4,6 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from conftest import PNG, enviar, postar
-
 from propagandas import agenda, alertas, create_app, db, tarefas
 
 
