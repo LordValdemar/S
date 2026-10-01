@@ -5,7 +5,7 @@ import threading
 import time
 from datetime import timedelta
 
-from . import agenda, alertas, backup, db
+from . import agenda, alertas, asaas, backup, cobranca, db
 
 log = logging.getLogger("propagandas.tarefas")
 
@@ -26,6 +26,8 @@ def manutencao(config):
     if config["BACKUP_MANTER"] > 0 and not backup.fez_backup_hoje(config):
         backup.criar_backup(config)
     limpar_exibicoes_antigas(config)
+    if asaas.configurado(config):
+        cobranca.sincronizar_todas()  # caso algum webhook tenha se perdido; aplica a tolerância de atraso
 
 
 def iniciar_tarefas(app):

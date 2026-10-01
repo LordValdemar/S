@@ -12,10 +12,10 @@ import os
 import secrets
 from logging.handlers import TimedRotatingFileHandler
 
-from flask import Flask, flash, redirect, request, url_for
+from flask import Flask, flash, g, redirect, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import agenda, auth, db, empresa, exibicao, legal, painel, plataforma, relatorios, telas
+from . import agenda, auth, cobranca, db, empresa, exibicao, legal, painel, plataforma, relatorios, telas
 
 PASTA_PROJETO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -61,6 +61,12 @@ def montar_config(sobrescrever=None):
         "SMTP_USUARIO": os.environ.get("SMTP_USUARIO", ""),
         "SMTP_SENHA": os.environ.get("SMTP_SENHA", ""),
         "SMTP_REMETENTE": os.environ.get("SMTP_REMETENTE", ""),
+        # Cobrança automática pelo Asaas
+        "ASAAS_API_KEY": os.environ.get("ASAAS_API_KEY", ""),
+        "ASAAS_AMBIENTE": os.environ.get("ASAAS_AMBIENTE", "sandbox"),   # "sandbox" ou "producao"
+        "ASAAS_WEBHOOK_TOKEN": os.environ.get("ASAAS_WEBHOOK_TOKEN", ""),
+        "ASAAS_URL": os.environ.get("ASAAS_URL", ""),  # opcional: outro endereço da API (testes)
+        "COBRANCA_TOLERANCIA_DIAS": int(os.environ.get("COBRANCA_TOLERANCIA_DIAS", 5)),
     }
     config.update(sobrescrever)
     return config
@@ -128,10 +134,22 @@ def create_app(sobrescrever=None):
     app.register_blueprint(empresa.bp)
     app.register_blueprint(plataforma.bp)
     app.register_blueprint(legal.bp)
+    app.register_blueprint(cobranca.bp)
 
     app.jinja_env.filters["tempo_desde"] = agenda.tempo_desde
     app.jinja_env.filters["data_local"] = agenda.local_formatado
     app.jinja_env.filters["duracao"] = agenda.duracao_formatada
+    app.jinja_env.filters["reais"] = cobranca.reais
+
+    if app.config["ASAAS_AMBIENTE"] not in ("sandbox", "producao"):
+        raise ValueError("ASAAS_AMBIENTE deve ser 'sandbox' ou 'producao'")
+
+    @app.context_processor
+    def aviso_de_fatura():
+        """Fatura vencida da empresa do usuário, para o aviso no topo do painel."""
+        if getattr(g, "usuario", None) is None:
+            return {}
+        return {"fatura_vencida": cobranca.fatura_vencida(db.obter(), g.empresa_id)}
 
     @app.after_request
     def cabecalhos_de_seguranca(resposta):

@@ -23,6 +23,7 @@ Serve para **usar nas suas lojas** e para **vender como serviço**: cada cliente
 - Cada cliente é uma **empresa** com dados totalmente isolados: propagandas, telas, grupos, usuários, relatórios e alertas.
 - **Painel da plataforma** (só para você): criar clientes, definir o **plano** (limite de telas e de armazenamento), **suspender** por falta de pagamento (o painel é bloqueado e as TVs ficam sem propagandas, sem perder dados) e excluir.
 - Visão geral de todos os clientes: telas (online), propagandas, armazenamento e usuários.
+- **Cobrança automática pelo Asaas**: planos com preço, assinatura mensal (PIX, boleto ou cartão), faturas atualizadas por webhook, **bloqueio automático por atraso** e **liberação automática** quando o cliente paga.
 - Cada cliente configura os próprios alertas e pode **exportar todos os dados** (portabilidade, LGPD).
 - **Modelos** de Política de Privacidade e Termos de Uso, que precisam de revisão jurídica.
 
@@ -102,11 +103,47 @@ python servidor.py
 - [ ] Servidor na internet (VPS ou nuvem) com **HTTPS** (veja “Acesso pela internet”) e backup copiado para **fora** do servidor.
 - [ ] `NOME_PLATAFORMA` e `CONTATO_PLATAFORMA` configurados (aparecem nas páginas legais).
 - [ ] **Política de Privacidade** (`/privacidade`) e **Termos de Uso** (`/termos`) revisados por um advogado e completados com razão social, CNPJ, preços e foro. Os textos ficam em `propagandas/templates/privacidade.html` e `termos.html`.
-- [ ] Contrato de prestação de serviço e emissão de nota fiscal.
+- [ ] Contrato de prestação de serviço e emissão de nota fiscal (o Asaas pode emitir a nota de serviço automaticamente; configure no painel dele).
+- [ ] Cobrança testada no **sandbox** do Asaas antes de mudar para `ASAAS_AMBIENTE=producao`.
 - [ ] Servidor de e-mail (SMTP) configurado, se os clientes forem receber alertas por e-mail.
 - [ ] 2FA ativada no seu usuário, que administra a plataforma.
 
-A cobrança ainda é manual: você cobra por fora e suspende ou reativa pelo painel.
+Sem o Asaas configurado, a cobrança é manual: você cobra por fora e suspende ou reativa pelo painel. Com o Asaas, tudo isso é automático (veja abaixo).
+
+## Cobrança automática (Asaas)
+
+### 1. Configurar (uma vez)
+
+1. Crie uma conta no [Asaas](https://www.asaas.com). Para testar sem dinheiro de verdade, crie também uma conta no **sandbox** ([sandbox.asaas.com](https://sandbox.asaas.com)).
+2. Em **Integrações → Chave de API**, gere a chave. A do sandbox começa com `$aact_hmlg_` e a de produção com `$aact_prod_`.
+3. Em **Integrações → Webhooks**, crie um webhook:
+   - **URL:** `https://SEU-DOMINIO/webhooks/asaas` (precisa ser acessível pela internet, com HTTPS);
+   - **Token de autenticação:** uma sequência aleatória de 32 a 255 caracteres. Para gerar uma: `python -c "import secrets; print(secrets.token_urlsafe(40))"`;
+   - **Eventos:** os de **cobranças** (`PAYMENT_CREATED`, `PAYMENT_UPDATED`, `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_DELETED`, `PAYMENT_REFUNDED`).
+4. Configure o servidor:
+
+```bash
+ASAAS_API_KEY='$aact_hmlg_...'      # use aspas simples: a chave começa com $
+ASAAS_AMBIENTE=sandbox              # troque para "producao" quando for cobrar de verdade
+ASAAS_WEBHOOK_TOKEN=o-mesmo-token-do-passo-3
+COBRANCA_TOLERANCIA_DIAS=5          # dias de atraso antes de bloquear
+```
+
+### 2. Usar
+
+1. Em **Plataforma → Planos**, crie os planos (ex.: Básico, R$ 49,90, 3 telas; Pro, R$ 99,90, 10 telas).
+2. No cliente, abra **Cobrança**, escolha o plano, informe o **CPF ou CNPJ** e o e-mail de cobrança, marque **Bloquear por atraso** e salve.
+3. Clique em **Ativar cobrança no Asaas** e escolha o primeiro vencimento. Pronto: o Asaas gera uma fatura por mês e avisa o cliente por e-mail. O cliente escolhe PIX, boleto ou cartão.
+
+**O que acontece sozinho:**
+- Fatura vencida aparece como aviso no painel do cliente, com o link para pagar.
+- Passada a tolerância, o cliente é **suspenso**: as telas ficam sem propagandas e, ao entrar, ele vê só a página de pagamento.
+- Quando o Asaas confirma o pagamento, o cliente é **reativado** na hora.
+- Você recebe um aviso (pelos canais de alerta da sua empresa) a cada suspensão e reativação.
+- De hora em hora, o sistema confere as faturas no Asaas, caso algum aviso do webhook tenha se perdido.
+- Mudar o plano de um cliente atualiza o valor da assinatura no Asaas, inclusive das faturas ainda não pagas.
+
+Uma suspensão feita **manualmente** por você nunca é desfeita por um pagamento. Para dar alguns dias a mais a um cliente em atraso, desmarque **Bloquear por atraso** e reative.
 
 > Para descobrir o IP: no Linux, `hostname -I`; no Windows, `ipconfig` (procure “Endereço IPv4”).
 
@@ -191,6 +228,10 @@ Os backups ficam no mesmo disco. Para proteção contra defeito no computador, c
 | `LOGS_DIAS` | `190` | Por quantos dias guardar os logs de acesso (o Marco Civil exige no mínimo 6 meses) |
 | `NOME_PLATAFORMA` | `Painel de Propagandas` | Nome exibido no topo e nas páginas legais (sua marca) |
 | `CONTATO_PLATAFORMA` | (vazio) | E-mail ou telefone de suporte, exibido nas páginas legais |
+| `ASAAS_API_KEY` | (vazio) | Chave da API do Asaas. Sem ela, a cobrança é manual |
+| `ASAAS_AMBIENTE` | `sandbox` | `sandbox` (testes) ou `producao` |
+| `ASAAS_WEBHOOK_TOKEN` | (vazio) | Token que o Asaas envia no webhook (o mesmo cadastrado no Asaas) |
+| `COBRANCA_TOLERANCIA_DIAS` | `5` | Dias de atraso tolerados antes de suspender o cliente |
 | `ALERTA_OFFLINE_MIN` | `5` | Minutos sem comunicação até alertar |
 | `ALERTA_WEBHOOK` | (vazio) | URL do webhook de alertas |
 | `ALERTA_EMAILS` | (vazio) | E-mails que recebem alertas, separados por vírgula |
@@ -231,6 +272,8 @@ propagandas/
 ├── empresa.py           # configurações da empresa e exportação dos dados
 ├── plataforma.py        # administração das empresas clientes
 ├── planos.py            # limites de telas e armazenamento
+├── cobranca.py          # planos com preço, assinaturas, faturas, webhook e bloqueio por atraso
+├── asaas.py             # cliente da API do Asaas
 ├── legal.py             # páginas de privacidade e termos
 ├── painel.py            # cadastro das propagandas (agendamento e destinos)
 ├── agenda.py            # fuso horário e regras de agendamento

@@ -150,31 +150,51 @@ def _verificar_csrf():
 
 def _buscar_usuario(conexao, usuario_id):
     return conexao.execute(
-        "SELECT u.*, e.nome AS empresa_nome, e.ativa AS empresa_ativa "
+        "SELECT u.*, e.nome AS empresa_nome, e.ativa AS empresa_ativa, e.motivo_suspensao "
         "FROM usuarios u JOIN empresas e ON e.id = u.empresa_id WHERE u.id = ?",
         (usuario_id,),
     ).fetchone()
 
 
+def suspensa_por_pagamento(linha):
+    """Empresa suspensa por falta de pagamento: entra, mas só vê a página de pagamento."""
+    return not linha["empresa_ativa"] and linha["motivo_suspensao"] == "inadimplencia" and not linha["plataforma"]
+
+
+# Páginas liberadas para empresas suspensas por falta de pagamento.
+LIBERADAS_SEM_PAGAMENTO = {
+    "cobranca.pagamento", "auth.sair", "auth.minha_conta", "auth.minha_senha", "auth.ativar_2fa",
+    "auth.desativar_2fa_proprio", "legal.privacidade", "legal.termos", "static",
+}
+
+
 def _carregar_usuario():
     g.usuario = None
     g.empresa_id = None
+    g.bloqueio_pagamento = False
     usuario_id = session.get("usuario_id")
     if usuario_id is None:
         return
     linha = _buscar_usuario(db.obter(), usuario_id)
     valido = linha and hmac.compare_digest(linha["token_sessao"], session.get("token", ""))
-    if valido and not linha["empresa_ativa"] and not linha["plataforma"]:
+    if valido and not linha["empresa_ativa"] and not linha["plataforma"] and not suspensa_por_pagamento(linha):
         flash("O acesso desta empresa está suspenso. Fale com o suporte.", "erro")
         valido = False
     if valido:
         g.usuario = linha
         g.empresa_id = linha["empresa_id"]
+        g.bloqueio_pagamento = suspensa_por_pagamento(linha)
     else:
         csrf = session.get("csrf")
         session.clear()
         if csrf:
             session["csrf"] = csrf
+
+
+def _restringir_se_bloqueado():
+    if g.bloqueio_pagamento and request.endpoint not in LIBERADAS_SEM_PAGAMENTO:
+        return redirect(url_for("cobranca.pagamento"))
+    return None
 
 
 def login_obrigatorio(papel=None):
@@ -224,6 +244,7 @@ def registrar(app):
     app.register_blueprint(bp)
     app.before_request(_verificar_csrf)
     app.before_request(_carregar_usuario)
+    app.before_request(_restringir_se_bloqueado)
     app.jinja_env.globals["csrf_token"] = token_csrf
     app.jinja_env.globals["PAPEIS"] = PAPEIS
 
@@ -283,12 +304,12 @@ def login():
             return render_template("login.html", usuario=usuario), 429
 
         linha = conexao.execute(
-            "SELECT u.*, e.ativa AS empresa_ativa FROM usuarios u JOIN empresas e ON e.id = u.empresa_id "
-            "WHERE u.usuario = ?",
+            "SELECT u.*, e.ativa AS empresa_ativa, e.motivo_suspensao FROM usuarios u "
+            "JOIN empresas e ON e.id = u.empresa_id WHERE u.usuario = ?",
             (usuario,),
         ).fetchone()
         if linha and check_password_hash(linha["senha_hash"], request.form.get("senha", "")):
-            if not linha["empresa_ativa"] and not linha["plataforma"]:
+            if not linha["empresa_ativa"] and not linha["plataforma"] and not suspensa_por_pagamento(linha):
                 log.warning("Login recusado: empresa suspensa (“%s”, IP %s)", usuario, ip)
                 flash("O acesso desta empresa está suspenso. Fale com o suporte.", "erro")
                 return render_template("login.html", usuario=usuario), 403

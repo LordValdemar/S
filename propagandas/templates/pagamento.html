@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Pagamento{% endblock %}
+{% block classe_main %}medio{% endblock %}
+{% block conteudo %}
+{% if g.bloqueio_pagamento %}
+  <section>
+    <h2>⛔ Acesso suspenso por falta de pagamento</h2>
+    <p>As telas da <strong>{{ empresa.nome }}</strong> estão sem propagandas até o pagamento da fatura em aberto. Os seus dados estão preservados.</p>
+    <p>Pague abaixo por <strong>PIX, boleto ou cartão</strong>. A liberação é <strong>automática</strong> assim que o pagamento for confirmado (PIX e cartão: em minutos; boleto: até 3 dias úteis).</p>
+  </section>
+{% endif %}
+
+<section>
+  <h2>Faturas</h2>
+  {% if not faturas %}
+    <p class="dica">Nenhuma fatura até o momento.</p>
+  {% else %}
+    <div class="tabela-rolagem">
+      <table>
+        <thead><tr><th>Vencimento</th><th class="numero">Valor</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+          {% for f in faturas %}
+            {% set rotulo, cor = STATUS.get(f.status, (f.status, "")) %}
+            <tr>
+              <td>{{ f.vencimento[8:10] }}/{{ f.vencimento[5:7] }}/{{ f.vencimento[:4] }}</td>
+              <td class="numero">{{ f.valor_centavos|reais }}</td>
+              <td><span class="selo {{ cor }}">{{ rotulo }}</span></td>
+              <td style="text-align:right">
+                {% if f.link and f.status in EM_ABERTO %}
+                  <a class="botao" href="{{ f.link }}" target="_blank" rel="noopener noreferrer">Pagar</a>
+                {% elif f.link %}
+                  <a href="{{ f.link }}" target="_blank" rel="noopener noreferrer">Comprovante</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+  <p class="dica">Dúvidas sobre cobrança? Fale com o suporte{% if config.CONTATO_PLATAFORMA %}: {{ config.CONTATO_PLATAFORMA }}{% endif %}.</p>
+</section>
+{% endblock %}

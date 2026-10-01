@@ -22,7 +22,7 @@
 </section>
 
 <section>
-  <h2>Seu plano</h2>
+  <h2>Seu plano{% if plano %}: {{ plano.nome }} <span class="dica">({{ plano.preco_centavos|reais }}/mês)</span>{% endif %}</h2>
   <table>
     <tbody>
       <tr>
@@ -36,6 +36,14 @@
     </tbody>
   </table>
 </section>
+
+{% if empresa.asaas_assinatura_id or tem_faturas %}
+<section>
+  <h2>Assinatura</h2>
+  <p>As faturas são enviadas por e-mail pelo Asaas e podem ser pagas por PIX, boleto ou cartão.</p>
+  <a class="botao secundario" href="{{ url_for('cobranca.pagamento') }}">Ver faturas</a>
+</section>
+{% endif %}
 
 <section>
   <h2>Seus dados</h2>

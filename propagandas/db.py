@@ -207,6 +207,46 @@ MIGRACOES = [
     CREATE INDEX exibicoes_empresa_data ON exibicoes(empresa_id, exibido_em);
     CREATE INDEX exibicoes_data ON exibicoes(exibido_em);
     """,
+    # 4 - planos com preço e cobrança automática (Asaas)
+    """
+    CREATE TABLE planos (
+        id              INTEGER PRIMARY KEY,
+        nome            TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+        preco_centavos  INTEGER NOT NULL CHECK (preco_centavos >= 0),
+        limite_telas    INTEGER,
+        limite_mb       INTEGER,
+        ativo           INTEGER NOT NULL DEFAULT 1
+    );
+
+    ALTER TABLE empresas ADD COLUMN plano_id INTEGER REFERENCES planos(id) ON DELETE SET NULL;
+    ALTER TABLE empresas ADD COLUMN documento TEXT NOT NULL DEFAULT '';        -- CPF ou CNPJ (só números)
+    ALTER TABLE empresas ADD COLUMN email_cobranca TEXT NOT NULL DEFAULT '';
+    ALTER TABLE empresas ADD COLUMN motivo_suspensao TEXT;                     -- 'manual' ou 'inadimplencia'
+    ALTER TABLE empresas ADD COLUMN cobranca_automatica INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE empresas ADD COLUMN asaas_cliente_id TEXT;
+    ALTER TABLE empresas ADD COLUMN asaas_assinatura_id TEXT;
+    UPDATE empresas SET motivo_suspensao = 'manual' WHERE ativa = 0;
+    CREATE UNIQUE INDEX empresas_assinatura ON empresas(asaas_assinatura_id) WHERE asaas_assinatura_id IS NOT NULL;
+
+    CREATE TABLE faturas (
+        id              INTEGER PRIMARY KEY,
+        empresa_id      INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        asaas_id        TEXT    NOT NULL UNIQUE,
+        valor_centavos  INTEGER NOT NULL,
+        vencimento      TEXT    NOT NULL,           -- AAAA-MM-DD
+        status          TEXT    NOT NULL,           -- status do Asaas (PENDING, RECEIVED, OVERDUE...)
+        link            TEXT,                       -- página de pagamento (PIX, boleto ou cartão)
+        pago_em         TEXT,
+        atualizado_em   TEXT    NOT NULL
+    );
+    CREATE INDEX faturas_empresa ON faturas(empresa_id, vencimento);
+
+    -- Eventos de webhook já processados (o Asaas pode reenviar o mesmo evento).
+    CREATE TABLE webhook_eventos (
+        id           TEXT PRIMARY KEY,
+        recebido_em  TEXT NOT NULL
+    );
+    """,
 ]
 
 

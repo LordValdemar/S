@@ -5,7 +5,7 @@ import os
 
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import alertas, db
+from . import agenda, alertas, asaas, cobranca, db
 from .auth import EMPRESA_PRINCIPAL, ErroUsuario, criar_usuario, plataforma_obrigatoria
 from .planos import MB
 
@@ -45,8 +45,29 @@ def lista():
         contagem = resumo_telas.setdefault(tela["empresa_id"], {"total": 0, "online": 0})
         contagem["total"] += 1
         contagem["online"] += alertas.esta_online(tela)
+    faturas = {}
+    for fatura in conexao.execute(
+        "SELECT * FROM faturas WHERE status != 'DELETED' ORDER BY vencimento DESC"
+    ).fetchall():
+        lista_empresa = faturas.setdefault(fatura["empresa_id"], [])
+        if len(lista_empresa) < 6:
+            lista_empresa.append(fatura)
     return render_template(
-        "plataforma.html", empresas=empresas, telas=resumo_telas, MB=MB, principal=EMPRESA_PRINCIPAL
+        "plataforma.html",
+        empresas=empresas,
+        telas=resumo_telas,
+        MB=MB,
+        principal=EMPRESA_PRINCIPAL,
+        planos=conexao.execute("SELECT * FROM planos ORDER BY preco_centavos").fetchall(),
+        faturas=faturas,
+        STATUS=cobranca.STATUS,
+        asaas_configurado=asaas.configurado(),
+        ambiente=current_app.config["ASAAS_AMBIENTE"],
+        hoje=agenda.agora_local().date(),
+        receita=conexao.execute(
+            "SELECT COALESCE(SUM(p.preco_centavos), 0) FROM empresas e JOIN planos p ON p.id = e.plano_id "
+            "WHERE e.asaas_assinatura_id IS NOT NULL AND e.ativa = 1"
+        ).fetchone()[0],
     )
 
 
@@ -85,12 +106,14 @@ def atualizar(empresa_id):
         ativa = True  # a empresa principal (a sua) nunca é suspensa
     with conexao:
         conexao.execute(
-            "UPDATE empresas SET nome = ?, limite_telas = ?, limite_mb = ?, ativa = ? WHERE id = ?",
+            "UPDATE empresas SET nome = ?, limite_telas = ?, limite_mb = ?, ativa = ?, motivo_suspensao = ? WHERE id = ?",
             (
                 request.form.get("nome", "").strip()[:100] or empresa["nome"],
                 _ler_limite("limite_telas"),
                 _ler_limite("limite_mb"),
                 1 if ativa else 0,
+                # Mantém o motivo se nada mudou; suspensão feita aqui é sempre manual.
+                None if ativa else (empresa["motivo_suspensao"] if not empresa["ativa"] else "manual"),
                 empresa_id,
             ),
         )
@@ -111,6 +134,14 @@ def excluir(empresa_id):
     if request.form.get("confirmacao", "").strip() != empresa["nome"]:
         flash("Para excluir, digite o nome exato da empresa.", "erro")
         return redirect(url_for("plataforma.lista"))
+
+    if empresa["asaas_assinatura_id"]:
+        # Sem isso o Asaas continuaria cobrando um cliente que não existe mais.
+        try:
+            asaas.cancelar_assinatura(empresa["asaas_assinatura_id"])
+        except asaas.ErroAsaas as erro:
+            flash(f"Não foi possível cancelar a assinatura no Asaas ({erro}). A empresa não foi excluída.", "erro")
+            return redirect(url_for("plataforma.lista"))
 
     arquivos = [linha["arquivo"] for linha in conexao.execute(
         "SELECT arquivo FROM propagandas WHERE empresa_id = ?", (empresa_id,)

@@ -48,6 +48,8 @@ def configuracoes():
         uso=planos.uso(conexao, g.empresa_id),
         smtp_configurado=bool(current_app.config["SMTP_HOST"]),
         canais=alertas.canais_da_empresa(empresa, current_app.config),
+        plano=conexao.execute("SELECT * FROM planos WHERE id = ?", (empresa["plano_id"],)).fetchone(),
+        tem_faturas=conexao.execute("SELECT 1 FROM faturas WHERE empresa_id = ?", (g.empresa_id,)).fetchone() is not None,
     )
 
 

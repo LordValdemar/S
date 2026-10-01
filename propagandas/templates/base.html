@@ -13,7 +13,15 @@
       <a href="{{ url_for('painel.lista') }}">📺 {{ config.NOME_PLATAFORMA }}</a>
       {% if g.usuario %}<span class="empresa-atual">{{ g.usuario.empresa_nome }}</span>{% endif %}
     </h1>
-    {% if g.usuario %}
+    {% if g.usuario and g.bloqueio_pagamento %}
+      <nav>
+        <a href="{{ url_for('cobranca.pagamento') }}" class="atual">Pagamento</a>
+        <form action="{{ url_for('auth.sair') }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit">Sair ({{ g.usuario.usuario }})</button>
+        </form>
+      </nav>
+    {% elif g.usuario %}
       <nav>
         <a href="{{ url_for('painel.lista') }}" {% if request.endpoint == 'painel.lista' %}class="atual"{% endif %}>Propagandas</a>
         {% if g.usuario.papel == 'admin' %}
@@ -38,6 +46,13 @@
     {% endif %}
   </header>
   <main class="{% block classe_main %}{% endblock %}">
+    {% if fatura_vencida and request.endpoint != 'cobranca.pagamento' %}
+      <div class="aviso erro">
+        💳 Há uma fatura vencida em {{ fatura_vencida.vencimento[8:10] }}/{{ fatura_vencida.vencimento[5:7] }}/{{ fatura_vencida.vencimento[:4] }}
+        ({{ fatura_vencida.valor_centavos|reais }}). Pague para evitar a suspensão das telas.
+        <a href="{{ url_for('cobranca.pagamento') }}">Ver fatura</a>
+      </div>
+    {% endif %}
     {% for categoria, mensagem in get_flashed_messages(with_categories=true) %}
       <div class="aviso {{ categoria }}">{{ mensagem }}</div>
     {% endfor %}

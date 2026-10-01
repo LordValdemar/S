@@ -1,6 +1,58 @@
 {% extends "base.html" %}
 {% block titulo %}Plataforma{% endblock %}
 {% block conteudo %}
+<div class="cartoes">
+  <div class="cartao"><div class="valor">{{ empresas|length - 1 }}</div><div class="rotulo">clientes</div></div>
+  <div class="cartao"><div class="valor">{{ receita|reais }}</div><div class="rotulo">receita mensal (assinaturas ativas)</div></div>
+  <div class="cartao">
+    <div class="valor">{% if asaas_configurado %}Asaas{% else %}Manual{% endif %}</div>
+    <div class="rotulo">{% if asaas_configurado %}cobrança automática ({{ 'testes / sandbox' if ambiente == 'sandbox' else 'produção' }}){% else %}configure ASAAS_API_KEY para automatizar{% endif %}</div>
+  </div>
+</div>
+
+<section>
+  <h2>Planos</h2>
+  {% if planos %}
+    <div class="tabela-rolagem">
+      <table>
+        <thead><tr><th>Plano</th><th class="numero">Preço/mês</th><th class="numero">Telas</th><th class="numero">Armazenamento</th><th></th></tr></thead>
+        <tbody>
+          {% for p in planos %}
+            <tr>
+              <td>{{ p.nome }}{% if not p.ativo %} <span class="selo">inativo</span>{% endif %}</td>
+              <td class="numero">{{ p.preco_centavos|reais }}</td>
+              <td class="numero">{{ p.limite_telas if p.limite_telas is not none else '∞' }}</td>
+              <td class="numero">{{ (p.limite_mb ~ ' MB') if p.limite_mb is not none else '∞' }}</td>
+              <td>
+                <details>
+                  <summary>Editar</summary>
+                  <form action="{{ url_for('cobranca.atualizar_plano', plano_id=p.id) }}" method="post" class="linha" style="margin-top:8px">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div><label>Nome</label><input type="text" name="nome" value="{{ p.nome }}" maxlength="60" required></div>
+                    <div><label>Preço (R$)</label><input type="text" name="preco" value="{{ '%.2f'|format(p.preco_centavos / 100)|replace('.', ',') }}" required inputmode="decimal"></div>
+                    <div><label>Telas</label><input type="number" name="limite_telas" min="0" value="{{ p.limite_telas if p.limite_telas is not none else '' }}" placeholder="sem limite"></div>
+                    <div><label>MB</label><input type="number" name="limite_mb" min="0" value="{{ p.limite_mb if p.limite_mb is not none else '' }}" placeholder="sem limite"></div>
+                    <div class="fixo"><label><input type="checkbox" name="ativo" {% if p.ativo %}checked{% endif %}> Ativo</label></div>
+                    <div class="fixo"><button type="submit">Salvar</button></div>
+                  </form>
+                </details>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+  <form action="{{ url_for('cobranca.novo_plano') }}" method="post" class="linha" style="margin-top:12px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label for="plano-nome">Novo plano</label><input type="text" id="plano-nome" name="nome" maxlength="60" required placeholder="Ex.: Básico"></div>
+    <div><label for="plano-preco">Preço/mês (R$)</label><input type="text" id="plano-preco" name="preco" required inputmode="decimal" placeholder="49,90"></div>
+    <div><label for="plano-telas">Telas</label><input type="number" id="plano-telas" name="limite_telas" min="0" placeholder="sem limite"></div>
+    <div><label for="plano-mb">Armazenamento (MB)</label><input type="number" id="plano-mb" name="limite_mb" min="0" placeholder="sem limite"></div>
+    <div class="fixo"><button type="submit">Criar plano</button></div>
+  </form>
+</section>
+
 <section>
   <h2>Nova empresa (cliente)</h2>
   <form action="{{ url_for('plataforma.nova') }}" method="post">
@@ -35,12 +87,72 @@
             <td class="numero">{{ e.propagandas }}</td>
             <td class="numero">{{ '%.1f'|format(e.bytes / MB) }} MB{% if e.limite_mb is not none %}/{{ e.limite_mb }}{% endif %}</td>
             <td class="numero">{{ e.usuarios }}</td>
-            <td>{% if e.ativa %}<span class="selo no-ar">Ativa</span>{% else %}<span class="selo fora">Suspensa</span>{% endif %}</td>
+            <td>
+              {% if e.ativa %}<span class="selo no-ar">Ativa</span>
+              {% elif e.motivo_suspensao == 'inadimplencia' %}<span class="selo fora">Suspensa: pagamento</span>
+              {% else %}<span class="selo fora">Suspensa</span>{% endif %}
+              {% if e.asaas_assinatura_id %}<br><span class="selo">💳 cobrança ativa</span>{% endif %}
+            </td>
           </tr>
           <tr>
             <td colspan="6" style="border-top:0; padding-top:0">
               <details>
-                <summary>Editar plano / suspender{% if e.id != principal %} / excluir{% endif %}</summary>
+                <summary>{% if e.id != principal %}Cobrança / {% endif %}Editar / suspender{% if e.id != principal %} / excluir{% endif %}</summary>
+                {% if e.id != principal %}
+                  <h4>Cobrança</h4>
+                  <form action="{{ url_for('cobranca.salvar_cobranca', empresa_id=e.id) }}" method="post" class="linha">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div>
+                      <label>Plano</label>
+                      <select name="plano_id">
+                        <option value="">Sem plano</option>
+                        {% for p in planos if p.ativo or p.id == e.plano_id %}
+                          <option value="{{ p.id }}" {% if p.id == e.plano_id %}selected{% endif %}>{{ p.nome }}: {{ p.preco_centavos|reais }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div><label>CPF ou CNPJ</label><input type="text" name="documento" value="{{ e.documento }}" inputmode="numeric" maxlength="18"></div>
+                    <div><label>E-mail de cobrança</label><input type="email" name="email_cobranca" value="{{ e.email_cobranca }}" maxlength="200"></div>
+                    <div class="fixo"><label title="Suspende sozinho quando uma fatura passa da tolerância e reativa quando é paga"><input type="checkbox" name="cobranca_automatica" {% if e.cobranca_automatica %}checked{% endif %}> Bloquear por atraso</label></div>
+                    <div class="fixo"><button type="submit">Salvar</button></div>
+                  </form>
+                  {% if asaas_configurado %}
+                    <div class="acoes">
+                      {% if not e.asaas_assinatura_id %}
+                        <form action="{{ url_for('cobranca.ativar_cobranca', empresa_id=e.id) }}" method="post" class="linha">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <div><label>Primeiro vencimento</label><input type="date" name="primeiro_vencimento" value="{{ hoje.isoformat() }}" min="{{ hoje.isoformat() }}"></div>
+                          <div class="fixo"><button type="submit" {% if not e.plano_id or not e.documento %}disabled title="Escolha o plano e informe o CPF/CNPJ"{% endif %}>Ativar cobrança no Asaas</button></div>
+                        </form>
+                      {% else %}
+                        <form action="{{ url_for('cobranca.sincronizar_empresa', empresa_id=e.id) }}" method="post">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <button class="secundario">Atualizar faturas</button>
+                        </form>
+                        <form action="{{ url_for('cobranca.cancelar_cobranca', empresa_id=e.id) }}" method="post" data-confirmar="Cancelar a assinatura de {{ e.nome }} no Asaas? Nenhuma nova fatura será gerada.">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <button class="perigo">Cancelar cobrança</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                  {% if faturas.get(e.id) %}
+                    <table style="margin-top:8px">
+                      <tbody>
+                        {% for f in faturas[e.id] %}
+                          {% set rotulo, cor = STATUS.get(f.status, (f.status, "")) %}
+                          <tr>
+                            <td>{{ f.vencimento[8:10] }}/{{ f.vencimento[5:7] }}/{{ f.vencimento[:4] }}</td>
+                            <td class="numero">{{ f.valor_centavos|reais }}</td>
+                            <td><span class="selo {{ cor }}">{{ rotulo }}</span></td>
+                            <td>{% if f.link %}<a href="{{ f.link }}" target="_blank" rel="noopener noreferrer">ver</a>{% endif %}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  {% endif %}
+                  <h4>Plano e acesso</h4>
+                {% endif %}
                 <form action="{{ url_for('plataforma.atualizar', empresa_id=e.id) }}" method="post" class="linha" style="margin-top:8px">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <div style="flex:2"><label>Nome</label><input type="text" name="nome" value="{{ e.nome }}" maxlength="100"></div>
@@ -52,7 +164,7 @@
                   <div class="fixo"><button type="submit">Salvar</button></div>
                 </form>
                 {% if e.id != principal %}
-                  <p class="dica">Suspender bloqueia o acesso ao painel e deixa as TVs do cliente sem propagandas. Os dados são mantidos.</p>
+                  <p class="dica">Suspender bloqueia o acesso ao painel e deixa as TVs do cliente sem propagandas. Os dados são mantidos. Para liberar um cliente em atraso por alguns dias, desmarque “Bloquear por atraso” antes de reativar; senão, ele é suspenso de novo na próxima verificação.</p>
                   <form action="{{ url_for('plataforma.excluir', empresa_id=e.id) }}" method="post" class="linha" data-confirmar="Excluir {{ e.nome }} e TODOS os dados (propagandas, telas, relatórios)? Isso não pode ser desfeito.">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div style="flex:2"><label>Para excluir, digite o nome da empresa</label><input type="text" name="confirmacao" autocomplete="off"></div>

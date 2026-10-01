@@ -12,6 +12,10 @@ services:
       FUSO_HORARIO: America/Sao_Paulo
       NOME_PLATAFORMA: Painel de Propagandas
       # CONTATO_PLATAFORMA: suporte@suaempresa.com.br
+      # Cobrança automática (opcional), veja o README:
+      # ASAAS_API_KEY: $$aact_hmlg_...     # no docker compose, "$" vira "$$"
+      # ASAAS_AMBIENTE: sandbox
+      # ASAAS_WEBHOOK_TOKEN: troque-por-um-token-aleatorio
       # Alertas (opcional), veja o README:
       # ALERTA_WEBHOOK: https://hooks.slack.com/services/...
       # SMTP_HOST: smtp.gmail.com
