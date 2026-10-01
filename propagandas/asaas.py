@@ -106,6 +106,18 @@ def cancelar_assinatura(assinatura_id):
     return chamar("DELETE", f"/subscriptions/{assinatura_id}")
 
 
-def faturas_da_assinatura(assinatura_id):
-    resposta = chamar("GET", f"/subscriptions/{assinatura_id}/payments", parametros={"limit": 100})
-    return resposta.get("data", [])
+def faturas_da_assinatura(assinatura_id, max_paginas=20):
+    """Todas as faturas da assinatura (a API devolve em páginas de até 100)."""
+    faturas = []
+    for pagina in range(max_paginas):
+        resposta = chamar("GET", f"/subscriptions/{assinatura_id}/payments",
+                          parametros={"limit": 100, "offset": pagina * 100})
+        faturas.extend(resposta.get("data", []))
+        if not resposta.get("hasMore"):
+            return faturas
+    raise ErroAsaas("a assinatura tem faturas demais para sincronizar")
+
+
+def buscar_fatura(fatura_id):
+    """Situação atual de uma fatura, direto do Asaas (fonte da verdade)."""
+    return chamar("GET", f"/payments/{fatura_id}")

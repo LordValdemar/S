@@ -9,12 +9,18 @@ TOKEN = "token-do-webhook-com-mais-de-32-caracteres"
 
 
 class AsaasFalso:
-    """Substitui a API do Asaas: registra as chamadas e devolve respostas prontas."""
+    """Substitui a API do Asaas: registra as chamadas e devolve respostas prontas.
+
+    `pagamentos` é a "verdade" do Asaas: o que a API responde quando o sistema consulta.
+    """
 
     def __init__(self):
         self.chamadas = []
         self.pagamentos = []
         self.erro = None
+
+    def registrar(self, pagamento_):
+        self.pagamentos = [p for p in self.pagamentos if p["id"] != pagamento_["id"]] + [pagamento_]
 
     def __call__(self, metodo, url, chave, corpo=None):
         caminho = url.split("/v3", 1)[1]
@@ -26,7 +32,13 @@ class AsaasFalso:
         if metodo == "POST" and caminho == "/subscriptions":
             return {"id": "sub_000001", "status": "ACTIVE"}
         if metodo == "GET" and caminho.startswith("/subscriptions/sub_000001/payments"):
-            return {"data": self.pagamentos}
+            return {"data": self.pagamentos, "hasMore": False}
+        if metodo == "GET" and caminho.startswith("/payments/"):
+            fatura_id = caminho.split("/")[2]
+            for p in self.pagamentos:
+                if p["id"] == fatura_id:
+                    return p
+            raise asaas.ErroAsaas("Cobrança não encontrada.")
         return {"id": caminho.rsplit("/", 1)[-1], "deleted": metodo == "DELETE"}
 
 
@@ -43,6 +55,7 @@ def falso(app, monkeypatch):
     app.config.update(ASAAS_API_KEY="$aact_hmlg_teste", ASAAS_WEBHOOK_TOKEN=TOKEN, COBRANCA_TOLERANCIA_DIAS=5)
     asaas_falso = AsaasFalso()
     monkeypatch.setattr(asaas, "_enviar", asaas_falso)
+    monkeypatch.setattr(AsaasFalso, "atual", asaas_falso, raising=False)
     return asaas_falso
 
 
@@ -75,7 +88,10 @@ def ativar(plataforma, empresa_id, vencimento=None):
                   {"primeiro_vencimento": (vencimento or date.today()).isoformat()}, pagina="/plataforma/")
 
 
-def webhook(cliente, evento, pagamento_, id_evento=None, token=TOKEN):
+def webhook(cliente, evento, pagamento_, id_evento=None, token=TOKEN, verdadeiro=True):
+    """Envia um aviso de webhook. Com verdadeiro=True, o Asaas confirma o mesmo conteúdo."""
+    if verdadeiro and isinstance(pagamento_, dict) and "subscription" in pagamento_:
+        AsaasFalso.atual.registrar(pagamento_)
     corpo = {"id": id_evento or f"evt_{evento}_{pagamento_['id']}", "event": evento, "payment": pagamento_}
     return cliente.application.test_client().post("/webhooks/asaas", json=corpo, headers={"asaas-access-token": token})
 
@@ -339,3 +355,67 @@ def test_link_da_fatura_so_aceita_https(cliente_com_plano):
     ativar(plataforma, empresa_id)
     webhook(plataforma, "PAYMENT_CREATED", {**pagamento("pay_x"), "invoiceUrl": "javascript:alert(1)"})
     assert consultar(plataforma, "SELECT link FROM faturas WHERE asaas_id = 'pay_x'")[0]["link"] is None
+
+
+# ---------------------------------------------------------------------------
+# O webhook não é fonte da verdade
+# ---------------------------------------------------------------------------
+
+def test_aviso_falso_de_pagamento_nao_libera_cliente(cliente_com_plano, falso):
+    """Mesmo com o token certo, um "pago" falso é desmentido pela consulta à API do Asaas."""
+    plataforma, empresa_id = cliente_com_plano
+    ativar(plataforma, empresa_id)
+    vencida = pagamento(status="OVERDUE", vencimento=date.today() - timedelta(days=10))
+    webhook(plataforma, "PAYMENT_OVERDUE", vencida)
+    assert empresa(plataforma, empresa_id)["ativa"] == 0
+
+    falso_pago = {**vencida, "status": "RECEIVED", "value": 0.01}
+    resposta = webhook(plataforma, "PAYMENT_RECEIVED", falso_pago, verdadeiro=False)
+    assert resposta.get_json()["resultado"] is None
+    assert empresa(plataforma, empresa_id)["ativa"] == 0
+    fatura = consultar(plataforma, "SELECT * FROM faturas WHERE asaas_id = 'pay_1'")[0]
+    assert (fatura["status"], fatura["valor_centavos"]) == ("OVERDUE", 4990)  # valeu o que o Asaas disse
+    assert ("GET", "/payments/pay_1", None) in falso.chamadas
+
+
+def test_fatura_de_outra_assinatura_e_ignorada(cliente_com_plano, falso):
+    """Aviso apontando para a assinatura do cliente, mas a fatura real é de outro."""
+    plataforma, empresa_id = cliente_com_plano
+    ativar(plataforma, empresa_id)
+    falso.registrar({**pagamento("pay_outro", "RECEIVED"), "subscription": "sub_de_outra_pessoa"})
+    resposta = webhook(plataforma, "PAYMENT_RECEIVED", pagamento("pay_outro", "RECEIVED"), verdadeiro=False)
+    assert resposta.get_json()["ignorado"]
+    assert consultar(plataforma, "SELECT * FROM faturas WHERE asaas_id = 'pay_outro'") == []
+
+
+def test_asaas_fora_do_ar_deixa_para_a_sincronizacao(cliente_com_plano, falso):
+    plataforma, empresa_id = cliente_com_plano
+    ativar(plataforma, empresa_id)
+    falso.erro = "timeout"
+    resposta = webhook(plataforma, "PAYMENT_RECEIVED", pagamento("pay_2", "RECEIVED"), id_evento="evt_x")
+    assert resposta.status_code == 200 and resposta.get_json()["pendente"]
+    assert consultar(plataforma, "SELECT * FROM webhook_eventos WHERE id = 'evt_x'") == []  # será reaplicado
+    falso.erro = None
+    assert webhook(plataforma, "PAYMENT_RECEIVED", pagamento("pay_2", "RECEIVED"), id_evento="evt_x").get_json()["empresa"]
+
+
+def test_fatura_cancelada_no_asaas_sai_do_sistema(cliente_com_plano, falso):
+    """Se o aviso de cancelamento se perder, a sincronização corrige (e não suspende à toa)."""
+    plataforma, empresa_id = cliente_com_plano
+    ativar(plataforma, empresa_id)
+    webhook(plataforma, "PAYMENT_OVERDUE", pagamento("pay_3", "OVERDUE", date.today() - timedelta(days=2)))
+    falso.pagamentos = []  # cancelada no Asaas; o aviso nunca chegou
+    with plataforma.application.app_context():
+        cobranca.sincronizar_todas()
+        assert cobranca.avaliar_inadimplencia(db.obter(), empresa_id, hoje=date.today() + timedelta(days=30)) is None
+    assert consultar(plataforma, "SELECT status FROM faturas WHERE asaas_id = 'pay_3'")[0]["status"] == "DELETED"
+    assert empresa(plataforma, empresa_id)["ativa"] == 1
+
+
+def test_sincronizacao_le_todas_as_paginas(monkeypatch):
+    respostas = iter([
+        {"data": [{"id": f"pay_{i}"} for i in range(100)], "hasMore": True},
+        {"data": [{"id": "pay_100"}], "hasMore": False},
+    ])
+    monkeypatch.setattr(asaas, "chamar", lambda *args, **kwargs: next(respostas))
+    assert len(asaas.faturas_da_assinatura("sub_x")) == 101

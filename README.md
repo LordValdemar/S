@@ -139,9 +139,20 @@ COBRANCA_TOLERANCIA_DIAS=5          # dias de atraso antes de bloquear
 - Fatura vencida aparece como aviso no painel do cliente, com o link para pagar.
 - Passada a tolerância, o cliente é **suspenso**: as telas ficam sem propagandas e, ao entrar, ele vê só a página de pagamento.
 - Quando o Asaas confirma o pagamento, o cliente é **reativado** na hora.
+- O aviso do webhook **nunca é usado como verdade**: a cada aviso, o sistema consulta a fatura direto na API do Asaas. Mesmo quem descobrir o token do webhook não consegue liberar um cliente com um aviso falso.
 - Você recebe um aviso (pelos canais de alerta da sua empresa) a cada suspensão e reativação.
 - De hora em hora, o sistema confere as faturas no Asaas, caso algum aviso do webhook tenha se perdido.
 - Mudar o plano de um cliente atualiza o valor da assinatura no Asaas, inclusive das faturas ainda não pagas.
+
+### Segurança da chave do Asaas
+
+A chave de API (`ASAAS_API_KEY`) dá acesso à sua conta do Asaas, então trate-a como a senha do banco:
+- guarde-a só na configuração do servidor, **nunca** no código ou no GitHub;
+- ative a verificação em duas etapas na sua conta do Asaas;
+- se o Asaas oferecer, restrinja a chave ao IP do seu servidor e exija confirmação para transferências;
+- se suspeitar de vazamento, gere uma nova chave no painel do Asaas e atualize o servidor.
+
+Os dados de cartão, PIX e boleto **nunca** passam pelo seu servidor: o cliente paga na página do próprio Asaas.
 
 Uma suspensão feita **manualmente** por você nunca é desfeita por um pagamento. Para dar alguns dias a mais a um cliente em atraso, desmarque **Bloquear por atraso** e reative.
 

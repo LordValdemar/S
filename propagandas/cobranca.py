@@ -171,6 +171,17 @@ def sincronizar(conexao, empresa):
     pagamentos = asaas.faturas_da_assinatura(empresa["asaas_assinatura_id"])
     for pagamento in pagamentos:
         gravar_fatura(conexao, empresa["id"], pagamento)
+    # Fatura em aberto aqui que não existe mais no Asaas foi cancelada lá (e o aviso
+    # se perdeu): sem isso ela ficaria "vencida" para sempre e suspenderia o cliente.
+    ids_no_asaas = {p["id"] for p in pagamentos}
+    abertas = conexao.execute(
+        f"SELECT asaas_id FROM faturas WHERE empresa_id = ? AND status IN ({','.join('?' * len(EM_ABERTO))})",
+        (empresa["id"], *sorted(EM_ABERTO)),
+    ).fetchall()
+    with conexao:
+        for linha in abertas:
+            if linha["asaas_id"] not in ids_no_asaas:
+                conexao.execute("UPDATE faturas SET status = 'DELETED' WHERE asaas_id = ?", (linha["asaas_id"],))
     avaliar_inadimplencia(conexao, empresa["id"])
     return len(pagamentos)
 
@@ -214,7 +225,7 @@ def webhook_asaas():
 
     resposta = {"ok": True, "ignorado": True}
     empresa = None
-    if isinstance(pagamento, dict) and pagamento.get("id") and pagamento.get("subscription"):
+    if isinstance(pagamento, dict) and isinstance(pagamento.get("id"), str) and pagamento.get("subscription"):
         empresa = conexao.execute(
             "SELECT * FROM empresas WHERE asaas_assinatura_id = ?", (pagamento["subscription"],)
         ).fetchone()
@@ -222,11 +233,23 @@ def webhook_asaas():
             log.info("Webhook do Asaas para assinatura desconhecida %s", pagamento["subscription"])
 
     if empresa is not None:
-        if evento.get("event") == "PAYMENT_DELETED":
-            pagamento = {**pagamento, "deleted": True}
-        gravar_fatura(conexao, empresa["id"], pagamento)
+        # O conteúdo do webhook NUNCA é usado como verdade: ele só avisa que algo mudou.
+        # A situação da fatura é consultada direto na API do Asaas. Assim, mesmo quem
+        # descobrir o token não consegue liberar um cliente com um aviso falso de pagamento.
+        try:
+            verdadeiro = asaas.buscar_fatura(pagamento["id"])
+        except asaas.ErroAsaas as erro:
+            # A sincronização de hora em hora aplica depois. Responde 200 para o Asaas
+            # não pausar a fila, mas NÃO marca o evento como processado.
+            log.warning("Webhook: não foi possível confirmar a fatura %s no Asaas (%s)", pagamento["id"], erro)
+            return {"ok": True, "pendente": True}
+        if verdadeiro.get("id") != pagamento["id"] or verdadeiro.get("subscription") != empresa["asaas_assinatura_id"]:
+            log.warning("Webhook: a fatura %s não pertence à assinatura da empresa %s", pagamento["id"], empresa["id"])
+            return {"ok": True, "ignorado": True}
+        gravar_fatura(conexao, empresa["id"], verdadeiro)
         resultado = avaliar_inadimplencia(conexao, empresa["id"])
-        log.info("Asaas: %s da fatura %s (empresa %s)", evento.get("event"), pagamento["id"], empresa["id"])
+        log.info("Asaas: %s da fatura %s (empresa %s), situação confirmada: %s",
+                 evento.get("event"), pagamento["id"], empresa["id"], verdadeiro.get("status"))
         resposta = {"ok": True, "empresa": empresa["id"], "resultado": resultado}
 
     if evento_id:
