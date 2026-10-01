@@ -14,21 +14,33 @@
         <option value="admin">Administrador: também gerencia usuários</option>
       </select>
     </div>
-    <div style="flex:0"><button type="submit">Criar</button></div>
+    <div class="fixo"><button type="submit">Criar</button></div>
   </form>
 </section>
 
 <section>
   <h2>Usuários cadastrados</h2>
+  <div class="tabela-rolagem">
   <table>
-    <thead><tr><th>Usuário</th><th>Papel</th><th>Desde</th><th></th></tr></thead>
+    <thead><tr><th>Usuário</th><th>Papel</th><th>Duas etapas</th><th>Desde</th><th></th></tr></thead>
     <tbody>
       {% for u in usuarios %}
         <tr>
           <td>{{ u.usuario }}{% if u.id == g.usuario.id %} <span class="selo">você</span>{% endif %}</td>
-          <td>{{ PAPEIS[u.papel] }}</td>
-          <td>{{ u.criado_em[:10] }}</td>
+          <td>{{ PAPEIS[u.papel] }}{% if u.plataforma %} <span class="selo">plataforma</span>{% endif %}</td>
           <td>
+            {% if u.totp_segredo %}
+              <span class="selo no-ar">Ativada</span>
+              {% if u.id != g.usuario.id %}
+                <form action="{{ url_for('auth.desativar_2fa_usuario', usuario_id=u.id) }}" method="post" style="display:inline" data-confirmar="Desativar a verificação em duas etapas de {{ u.usuario }}? Use só se a pessoa perdeu o celular.">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="secundario">Desativar</button>
+                </form>
+              {% endif %}
+            {% else %}<span class="selo fora">Desativada</span>{% endif %}
+          </td>
+          <td>{{ u.criado_em[:10] }}</td>
+          <td class="acoes-celula">
             {% if u.id != g.usuario.id %}
               <form action="{{ url_for('auth.excluir_usuario', usuario_id=u.id) }}" method="post" data-confirmar="Excluir o usuário {{ u.usuario }}?">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -40,5 +52,6 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </section>
 {% endblock %}

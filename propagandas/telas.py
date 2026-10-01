@@ -5,7 +5,7 @@ import secrets
 
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import alertas, db
+from . import alertas, db, planos
 from .auth import login_obrigatorio
 
 bp = Blueprint("telas", __name__)
@@ -21,12 +21,14 @@ def _ler_grupo(conexao):
     valor = request.form.get("grupo_id", "")
     if not valor.isdigit():
         return None
-    linha = conexao.execute("SELECT id FROM grupos WHERE id = ?", (int(valor),)).fetchone()
+    linha = conexao.execute(
+        "SELECT id FROM grupos WHERE id = ? AND empresa_id = ?", (int(valor), g.empresa_id)
+    ).fetchone()
     return linha["id"] if linha else None
 
 
 def _buscar(conexao, tela_id):
-    tela = conexao.execute("SELECT * FROM telas WHERE id = ?", (tela_id,)).fetchone()
+    tela = conexao.execute("SELECT * FROM telas WHERE id = ? AND empresa_id = ?", (tela_id, g.empresa_id)).fetchone()
     if tela is None:
         abort(404)
     return tela
@@ -37,8 +39,11 @@ def _buscar(conexao, tela_id):
 def lista():
     conexao = db.obter()
     telas = conexao.execute(
-        "SELECT t.*, gr.nome AS grupo_nome FROM telas t LEFT JOIN grupos gr ON gr.id = t.grupo_id ORDER BY t.nome"
+        "SELECT t.*, gr.nome AS grupo_nome FROM telas t LEFT JOIN grupos gr ON gr.id = t.grupo_id "
+        "WHERE t.empresa_id = ? ORDER BY t.nome",
+        (g.empresa_id,),
     ).fetchall()
+    empresa = planos.empresa(conexao, g.empresa_id)
     online = {t["id"]: alertas.esta_online(t) for t in telas}
     return render_template(
         "telas.html",
@@ -47,10 +52,13 @@ def lista():
         offline=sum(1 for t in telas if t["ultimo_contato"] and not online[t["id"]]),
         grupos=conexao.execute(
             "SELECT gr.*, COUNT(t.id) AS total FROM grupos gr LEFT JOIN telas t ON t.grupo_id = gr.id "
-            "GROUP BY gr.id ORDER BY gr.nome"
+            "WHERE gr.empresa_id = ? GROUP BY gr.id ORDER BY gr.nome",
+            (g.empresa_id,),
         ).fetchall(),
-        canais=alertas.canais_configurados(current_app.config),
-        letreiro_geral=db.ler_config("letreiro"),
+        canais=alertas.canais_da_empresa(empresa, current_app.config),
+        letreiro_geral=db.ler_config(g.empresa_id, "letreiro"),
+        empresa=empresa,
+        uso=planos.uso(conexao, g.empresa_id),
     )
 
 
@@ -62,10 +70,13 @@ def nova():
     if not nome:
         flash("Dê um nome para a tela (ex.: “Balcão”, “Vitrine”).", "erro")
         return redirect(url_for("telas.lista"))
+    if not planos.pode_cadastrar_tela(conexao, g.empresa_id):
+        flash("O limite de telas do seu plano foi atingido. Fale com o suporte para ampliar.", "erro")
+        return redirect(url_for("telas.lista"))
     with conexao:
         conexao.execute(
-            "INSERT INTO telas (nome, codigo, grupo_id) VALUES (?, ?, ?)",
-            (nome, novo_codigo(), _ler_grupo(conexao)),
+            "INSERT INTO telas (empresa_id, nome, codigo, grupo_id) VALUES (?, ?, ?, ?)",
+            (g.empresa_id, nome, novo_codigo(), _ler_grupo(conexao)),
         )
     log.info("“%s” cadastrou a tela “%s”", g.usuario["usuario"], nome)
     flash(f"Tela “{nome}” cadastrada. Abra o endereço dela na TV.", "ok")
@@ -81,8 +92,8 @@ def atualizar(tela_id):
     letreiro = request.form.get("letreiro", "").strip()[:500] or None
     with conexao:
         conexao.execute(
-            "UPDATE telas SET nome = ?, grupo_id = ?, letreiro = ? WHERE id = ?",
-            (nome, _ler_grupo(conexao), letreiro, tela_id),
+            "UPDATE telas SET nome = ?, grupo_id = ?, letreiro = ? WHERE id = ? AND empresa_id = ?",
+            (nome, _ler_grupo(conexao), letreiro, tela_id, g.empresa_id),
         )
     log.info("“%s” alterou a tela “%s”", g.usuario["usuario"], nome)
     flash("Tela atualizada.", "ok")
@@ -95,7 +106,7 @@ def trocar_codigo(tela_id):
     conexao = db.obter()
     tela = _buscar(conexao, tela_id)
     with conexao:
-        conexao.execute("UPDATE telas SET codigo = ? WHERE id = ?", (novo_codigo(), tela_id))
+        conexao.execute("UPDATE telas SET codigo = ? WHERE id = ? AND empresa_id = ?", (novo_codigo(), tela_id, g.empresa_id))
     log.info("“%s” gerou novo endereço para a tela “%s”", g.usuario["usuario"], tela["nome"])
     flash(f"Novo endereço gerado para “{tela['nome']}”. O endereço antigo parou de funcionar.", "ok")
     return redirect(url_for("telas.lista"))
@@ -107,7 +118,7 @@ def excluir(tela_id):
     conexao = db.obter()
     tela = _buscar(conexao, tela_id)
     with conexao:
-        conexao.execute("DELETE FROM telas WHERE id = ?", (tela_id,))
+        conexao.execute("DELETE FROM telas WHERE id = ? AND empresa_id = ?", (tela_id, g.empresa_id))
     log.info("“%s” excluiu a tela “%s”", g.usuario["usuario"], tela["nome"])
     flash("Tela excluída. O histórico de exibições dela foi mantido nos relatórios.", "ok")
     return redirect(url_for("telas.lista"))
@@ -120,11 +131,11 @@ def novo_grupo():
     nome = request.form.get("nome", "").strip()[:100]
     if not nome:
         flash("Dê um nome para o grupo (ex.: “Lojas de SP”).", "erro")
-    elif conexao.execute("SELECT 1 FROM grupos WHERE nome = ?", (nome,)).fetchone():
+    elif conexao.execute("SELECT 1 FROM grupos WHERE nome = ? AND empresa_id = ?", (nome, g.empresa_id)).fetchone():
         flash(f"O grupo “{nome}” já existe.", "erro")
     else:
         with conexao:
-            conexao.execute("INSERT INTO grupos (nome) VALUES (?)", (nome,))
+            conexao.execute("INSERT INTO grupos (empresa_id, nome) VALUES (?, ?)", (g.empresa_id, nome))
         log.info("“%s” criou o grupo “%s”", g.usuario["usuario"], nome)
         flash("Grupo criado.", "ok")
     return redirect(url_for("telas.lista"))
@@ -134,13 +145,13 @@ def novo_grupo():
 @login_obrigatorio("admin")
 def excluir_grupo(grupo_id):
     conexao = db.obter()
-    grupo = conexao.execute("SELECT * FROM grupos WHERE id = ?", (grupo_id,)).fetchone()
+    grupo = conexao.execute("SELECT * FROM grupos WHERE id = ? AND empresa_id = ?", (grupo_id, g.empresa_id)).fetchone()
     if grupo is None:
         abort(404)
     with conexao:
         # Propagandas que só iam para este grupo ficam sem destino (não aparecem
         # em lugar nenhum) e o painel avisa. Nunca passam a ir para todas as telas.
-        conexao.execute("DELETE FROM grupos WHERE id = ?", (grupo_id,))
+        conexao.execute("DELETE FROM grupos WHERE id = ? AND empresa_id = ?", (grupo_id, g.empresa_id))
     log.info("“%s” excluiu o grupo “%s”", g.usuario["usuario"], grupo["nome"])
     flash("Grupo excluído. As telas dele ficaram sem grupo.", "ok")
     return redirect(url_for("telas.lista"))
@@ -149,10 +160,12 @@ def excluir_grupo(grupo_id):
 @bp.route("/alertas/testar", methods=["POST"])
 @login_obrigatorio("admin")
 def testar_alerta():
-    if not alertas.canais_configurados(current_app.config):
-        flash("Nenhum canal de alerta configurado. Veja a seção “Alertas” do README.", "erro")
+    empresa = planos.empresa(db.obter(), g.empresa_id)
+    canais = alertas.canais_da_empresa(empresa, current_app.config)
+    if not canais["nomes"]:
+        flash("Nenhum canal de alerta configurado. Configure em “Empresa”.", "erro")
     else:
-        erros = alertas.enviar_alerta(f"🔔 Teste de alerta enviado por {g.usuario['usuario']}.")
+        erros = alertas.enviar_alerta(f"🔔 Teste de alerta enviado por {g.usuario['usuario']}.", canais)
         if erros:
             flash("Falha ao enviar: " + "; ".join(erros), "erro")
         else:

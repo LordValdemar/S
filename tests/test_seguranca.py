@@ -67,9 +67,9 @@ def test_trocar_senha_derruba_outras_sessoes(logado):
     assert outro_aparelho.get("/").status_code == 200
 
     resposta = postar(
-        logado, "/senha",
+        logado, "/conta/senha",
         {"atual": "senha-forte-123", "nova": "outra-senha-456", "confirmacao": "outra-senha-456"},
-        pagina="/senha",
+        pagina="/conta",
     )
     assert resposta.status_code == 302
     assert logado.get("/").status_code == 200           # este continua conectado

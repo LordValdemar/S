@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Termos de Uso{% endblock %}
+{% block classe_main %}medio{% endblock %}
+{% block conteudo %}
+<section class="legal">
+  <div class="aviso modelo"><strong>Modelo.</strong> Revise com um advogado e complete com preço, forma de pagamento, prazo de contrato, multa, foro e dados da operadora antes de usar com clientes.</div>
+
+  <h1>Termos de Uso</h1>
+  <p>Ao usar o <strong>{{ config.NOME_PLATAFORMA }}</strong>, a empresa cliente e seus usuários concordam com estes termos.</p>
+
+  <h2>1. O serviço</h2>
+  <p>Plataforma de sinalização digital para cadastrar propagandas, agendá-las e exibi-las em telas, com monitoramento e relatórios de exibição.</p>
+
+  <h2>2. Contas e acesso</h2>
+  <ul>
+    <li>A empresa cliente é responsável pelos usuários que cadastra e pelo sigilo das senhas.</li>
+    <li>Recomenda-se ativar a verificação em duas etapas para administradores.</li>
+    <li>Cada usuário deve ser pessoal. Não compartilhe contas.</li>
+  </ul>
+
+  <h2>3. Conteúdo</h2>
+  <ul>
+    <li>A empresa cliente é a única responsável pelo conteúdo que publica e declara ter os direitos sobre imagens, vídeos, marcas e textos.</li>
+    <li>É proibido publicar conteúdo ilegal, que viole direitos de terceiros ou que contrarie o Código de Defesa do Consumidor e a autorregulamentação publicitária (CONAR).</li>
+    <li>A operadora pode remover conteúdo ou suspender contas em caso de violação destes termos ou por ordem judicial.</li>
+  </ul>
+
+  <h2>4. Planos e limites</h2>
+  <p>Cada plano define o número de telas e o espaço de armazenamento. Ao atingir o limite, novos cadastros ficam bloqueados até a ampliação do plano. A falta de pagamento pode levar à suspensão: o painel é bloqueado e as telas deixam de exibir propagandas, mas os dados são mantidos por um período antes da exclusão.</p>
+
+  <h2>5. Disponibilidade</h2>
+  <p>A operadora se esforça para manter o serviço disponível, mas não garante funcionamento ininterrupto. As telas continuam exibindo a última programação recebida em caso de queda de conexão. [Defina aqui o nível de serviço (SLA), se houver.]</p>
+
+  <h2>6. Dados</h2>
+  <p>O tratamento de dados pessoais segue a <a href="{{ url_for('legal.privacidade') }}">Política de Privacidade</a>. A empresa cliente pode exportar seus dados a qualquer momento, na página “Empresa”.</p>
+
+  <h2>7. Encerramento</h2>
+  <p>Qualquer parte pode encerrar o uso, conforme o contrato. Depois do encerramento, recomenda-se exportar os dados. Eles serão excluídos em seguida.</p>
+
+  <h2>8. Contato</h2>
+  <p>{% if config.CONTATO_PLATAFORMA %}{{ config.CONTATO_PLATAFORMA }}{% else %}[Informe o canal de suporte]{% endif %}</p>
+</section>
+{% endblock %}

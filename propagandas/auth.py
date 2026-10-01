@@ -1,4 +1,4 @@
-"""Login, usuários, permissões e proteção CSRF."""
+"""Login (com 2FA opcional), usuários, permissões, empresas e proteção CSRF."""
 
 import hmac
 import logging
@@ -21,15 +21,17 @@ from flask import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import db
+from . import db, totp
 
 bp = Blueprint("auth", __name__)
 log = logging.getLogger("propagandas.auth")
 
 PAPEIS = {"admin": "Administrador", "editor": "Editor"}
+EMPRESA_PRINCIPAL = 1  # a empresa de quem instalou o sistema
 SENHA_MINIMA = 8
 MAX_TENTATIVAS = 5
 JANELA_BLOQUEIO = 15 * 60  # segundos
+VALIDADE_ETAPA_2FA = 5 * 60
 
 
 class ErroUsuario(ValueError):
@@ -37,7 +39,7 @@ class ErroUsuario(ValueError):
 
 
 # ---------------------------------------------------------------------------
-# Regras de usuário (usadas pelo painel e pelo gerenciar.py)
+# Regras de usuário (usadas pelo painel, pela plataforma e pelo gerenciar.py)
 # ---------------------------------------------------------------------------
 
 def validar_senha(senha):
@@ -45,20 +47,25 @@ def validar_senha(senha):
         raise ErroUsuario(f"A senha precisa ter pelo menos {SENHA_MINIMA} caracteres.")
 
 
-def criar_usuario(conexao, usuario, senha, papel="editor"):
+def criar_usuario(conexao, empresa_id, usuario, senha, papel="editor", plataforma=False):
     usuario = usuario.strip()
     if not usuario or len(usuario) > 50:
         raise ErroUsuario("Informe um nome de usuário (até 50 caracteres).")
     if papel not in PAPEIS:
         raise ErroUsuario("Papel inválido.")
     validar_senha(senha)
+    if conexao.execute("SELECT 1 FROM empresas WHERE id = ?", (empresa_id,)).fetchone() is None:
+        raise ErroUsuario("Empresa não encontrada.")
+    # O nome de usuário é único em todo o sistema: o login não pergunta a empresa.
     if conexao.execute("SELECT 1 FROM usuarios WHERE usuario = ?", (usuario,)).fetchone():
-        raise ErroUsuario(f"O usuário “{usuario}” já existe.")
+        raise ErroUsuario(f"O usuário “{usuario}” já existe. Escolha outro nome.")
     with conexao:
-        conexao.execute(
-            "INSERT INTO usuarios (usuario, senha_hash, papel, token_sessao) VALUES (?, ?, ?, ?)",
-            (usuario, generate_password_hash(senha), papel, secrets.token_hex(16)),
+        cursor = conexao.execute(
+            "INSERT INTO usuarios (empresa_id, usuario, senha_hash, papel, plataforma, token_sessao) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (empresa_id, usuario, generate_password_hash(senha), papel, 1 if plataforma else 0, secrets.token_hex(16)),
         )
+    return cursor.lastrowid
 
 
 def trocar_senha(conexao, usuario_id, senha_nova):
@@ -71,12 +78,20 @@ def trocar_senha(conexao, usuario_id, senha_nova):
         )
 
 
+def desativar_2fa(conexao, usuario_id):
+    with conexao:
+        conexao.execute(
+            "UPDATE usuarios SET totp_segredo = NULL, totp_ultimo = 0, token_sessao = ? WHERE id = ?",
+            (secrets.token_hex(16), usuario_id),
+        )
+
+
 def existe_usuario(conexao):
     return conexao.execute("SELECT 1 FROM usuarios LIMIT 1").fetchone() is not None
 
 
 # ---------------------------------------------------------------------------
-# Limite de tentativas de login (por IP)
+# Limite de tentativas (senha e código 2FA), por IP
 # ---------------------------------------------------------------------------
 
 _tentativas = {}
@@ -87,7 +102,10 @@ def _bloqueado(ip):
     agora = time.monotonic()
     with _trava_tentativas:
         recentes = [t for t in _tentativas.get(ip, []) if agora - t < JANELA_BLOQUEIO]
-        _tentativas[ip] = recentes
+        if recentes:
+            _tentativas[ip] = recentes
+        else:
+            _tentativas.pop(ip, None)
         return len(recentes) >= MAX_TENTATIVAS
 
 
@@ -111,18 +129,6 @@ def token_csrf():
     return session["csrf"]
 
 
-def _carregar_usuario():
-    g.usuario = None
-    usuario_id = session.get("usuario_id")
-    if usuario_id is None:
-        return
-    linha = db.obter().execute("SELECT * FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
-    if linha and hmac.compare_digest(linha["token_sessao"], session.get("token", "")):
-        g.usuario = linha
-    else:
-        session.clear()
-
-
 def csrf_isento(funcao):
     """Para rotas chamadas pelas TVs, que se identificam pelo código da tela."""
     funcao.csrf_isento = True
@@ -142,6 +148,35 @@ def _verificar_csrf():
         abort(400)
 
 
+def _buscar_usuario(conexao, usuario_id):
+    return conexao.execute(
+        "SELECT u.*, e.nome AS empresa_nome, e.ativa AS empresa_ativa "
+        "FROM usuarios u JOIN empresas e ON e.id = u.empresa_id WHERE u.id = ?",
+        (usuario_id,),
+    ).fetchone()
+
+
+def _carregar_usuario():
+    g.usuario = None
+    g.empresa_id = None
+    usuario_id = session.get("usuario_id")
+    if usuario_id is None:
+        return
+    linha = _buscar_usuario(db.obter(), usuario_id)
+    valido = linha and hmac.compare_digest(linha["token_sessao"], session.get("token", ""))
+    if valido and not linha["empresa_ativa"] and not linha["plataforma"]:
+        flash("O acesso desta empresa está suspenso. Fale com o suporte.", "erro")
+        valido = False
+    if valido:
+        g.usuario = linha
+        g.empresa_id = linha["empresa_id"]
+    else:
+        csrf = session.get("csrf")
+        session.clear()
+        if csrf:
+            session["csrf"] = csrf
+
+
 def login_obrigatorio(papel=None):
     def decorador(funcao):
         @wraps(funcao)
@@ -157,6 +192,18 @@ def login_obrigatorio(papel=None):
         return verificar
 
     return decorador
+
+
+def plataforma_obrigatoria(funcao):
+    """Só para quem administra a plataforma (todas as empresas)."""
+    @wraps(funcao)
+    @login_obrigatorio()
+    def verificar(*args, **kwargs):
+        if not g.usuario["plataforma"]:
+            abort(403)
+        return funcao(*args, **kwargs)
+
+    return verificar
 
 
 def _destino_seguro(proximo):
@@ -188,7 +235,7 @@ def registrar(app):
 
 
 # ---------------------------------------------------------------------------
-# Páginas
+# Primeiro acesso, login e 2FA
 # ---------------------------------------------------------------------------
 
 @bp.route("/configurar", methods=["GET", "POST"])
@@ -200,18 +247,21 @@ def configurar():
     if request.method == "POST":
         usuario = request.form.get("usuario", "")
         senha = request.form.get("senha", "")
+        empresa = request.form.get("empresa", "").strip()[:100]
         if senha != request.form.get("confirmacao", ""):
             flash("As senhas não conferem.", "erro")
         else:
             try:
-                criar_usuario(conexao, usuario, senha, "admin")
+                novo_id = criar_usuario(conexao, EMPRESA_PRINCIPAL, usuario, senha, "admin", plataforma=True)
             except ErroUsuario as erro:
                 flash(str(erro), "erro")
             else:
-                novo = conexao.execute("SELECT * FROM usuarios WHERE usuario = ?", (usuario.strip(),)).fetchone()
-                _entrar(novo)
-                log.info("Administrador inicial “%s” criado (IP %s)", novo["usuario"], request.remote_addr)
-                flash("Tudo pronto! Agora envie suas propagandas.", "ok")
+                if empresa:
+                    with conexao:
+                        conexao.execute("UPDATE empresas SET nome = ? WHERE id = ?", (empresa, EMPRESA_PRINCIPAL))
+                _entrar(_buscar_usuario(conexao, novo_id))
+                log.info("Administrador inicial “%s” criado (IP %s)", usuario.strip(), request.remote_addr)
+                flash("Tudo pronto! Agora cadastre suas telas e envie as propagandas.", "ok")
                 return redirect(url_for("painel.lista"))
     return render_template("configurar.html")
 
@@ -232,12 +282,28 @@ def login():
             flash("Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.", "erro")
             return render_template("login.html", usuario=usuario), 429
 
-        linha = conexao.execute("SELECT * FROM usuarios WHERE usuario = ?", (usuario,)).fetchone()
+        linha = conexao.execute(
+            "SELECT u.*, e.ativa AS empresa_ativa FROM usuarios u JOIN empresas e ON e.id = u.empresa_id "
+            "WHERE u.usuario = ?",
+            (usuario,),
+        ).fetchone()
         if linha and check_password_hash(linha["senha_hash"], request.form.get("senha", "")):
+            if not linha["empresa_ativa"] and not linha["plataforma"]:
+                log.warning("Login recusado: empresa suspensa (“%s”, IP %s)", usuario, ip)
+                flash("O acesso desta empresa está suspenso. Fale com o suporte.", "erro")
+                return render_template("login.html", usuario=usuario), 403
+            proximo = request.args.get("proximo")
+            if linha["totp_segredo"]:
+                # Senha certa, mas ainda falta o código do aplicativo.
+                session.clear()
+                session["2fa_usuario"] = linha["id"]
+                session["2fa_desde"] = time.time()
+                session["2fa_proximo"] = proximo or ""
+                return redirect(url_for("auth.login_codigo"))
             _limpar_falhas(ip)
             _entrar(linha)
             log.info("Login de “%s” (IP %s)", linha["usuario"], ip)
-            return redirect(_destino_seguro(request.args.get("proximo")))
+            return redirect(_destino_seguro(proximo))
 
         _registrar_falha(ip)
         log.warning("Senha errada para “%s” (IP %s)", usuario, ip)
@@ -247,40 +313,143 @@ def login():
     return render_template("login.html", usuario="")
 
 
+@bp.route("/login/codigo", methods=["GET", "POST"])
+def login_codigo():
+    usuario_id = session.get("2fa_usuario")
+    if not usuario_id or time.time() - session.get("2fa_desde", 0) > VALIDADE_ETAPA_2FA:
+        session.pop("2fa_usuario", None)
+        flash("Entre de novo com usuário e senha.", "erro")
+        return redirect(url_for("auth.login"))
+
+    if request.method == "POST":
+        ip = request.remote_addr or "?"
+        if _bloqueado(ip):
+            flash("Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.", "erro")
+            return render_template("login_codigo.html"), 429
+        conexao = db.obter()
+        linha = _buscar_usuario(conexao, usuario_id)
+        contador = linha and linha["totp_segredo"] and totp.verificar(
+            linha["totp_segredo"], request.form.get("codigo", ""), linha["totp_ultimo"]
+        )
+        if contador:
+            with conexao:
+                conexao.execute("UPDATE usuarios SET totp_ultimo = ? WHERE id = ?", (contador, usuario_id))
+            proximo = session.get("2fa_proximo")
+            _limpar_falhas(ip)
+            _entrar(linha)
+            log.info("Login de “%s” com 2FA (IP %s)", linha["usuario"], ip)
+            return redirect(_destino_seguro(proximo))
+        _registrar_falha(ip)
+        log.warning("Código 2FA errado (usuário id %s, IP %s)", usuario_id, ip)
+        flash("Código incorreto ou já usado. Confira o aplicativo e tente de novo.", "erro")
+        return render_template("login_codigo.html"), 401
+
+    return render_template("login_codigo.html")
+
+
 @bp.route("/sair", methods=["POST"])
 def sair():
     session.clear()
     return redirect(url_for("auth.login"))
 
 
-@bp.route("/senha", methods=["GET", "POST"])
+# ---------------------------------------------------------------------------
+# Minha conta: senha e 2FA
+# ---------------------------------------------------------------------------
+
+@bp.route("/conta")
+@login_obrigatorio()
+def minha_conta():
+    segredo = None
+    qr = None
+    if not g.usuario["totp_segredo"]:
+        # Segredo provisório (guardado no banco, não no cookie): só passa a valer
+        # depois que o usuário confirma um código gerado pelo aplicativo.
+        segredo = g.usuario["totp_pendente"]
+        if not segredo:
+            segredo = totp.novo_segredo()
+            conexao = db.obter()
+            with conexao:
+                conexao.execute("UPDATE usuarios SET totp_pendente = ? WHERE id = ?", (segredo, g.usuario["id"]))
+        qr = totp.qr_code(segredo, g.usuario["usuario"])
+    return render_template("conta.html", segredo=segredo, qr=qr)
+
+
+@bp.route("/conta/senha", methods=["POST"])
 @login_obrigatorio()
 def minha_senha():
-    if request.method == "POST":
-        atual = request.form.get("atual", "")
-        nova = request.form.get("nova", "")
-        if not check_password_hash(g.usuario["senha_hash"], atual):
-            flash("A senha atual está incorreta.", "erro")
-        elif nova != request.form.get("confirmacao", ""):
-            flash("As senhas novas não conferem.", "erro")
+    atual = request.form.get("atual", "")
+    nova = request.form.get("nova", "")
+    if not check_password_hash(g.usuario["senha_hash"], atual):
+        flash("A senha atual está incorreta.", "erro")
+    elif nova != request.form.get("confirmacao", ""):
+        flash("As senhas novas não conferem.", "erro")
+    else:
+        try:
+            trocar_senha(db.obter(), g.usuario["id"], nova)
+        except ErroUsuario as erro:
+            flash(str(erro), "erro")
         else:
-            try:
-                trocar_senha(db.obter(), g.usuario["id"], nova)
-            except ErroUsuario as erro:
-                flash(str(erro), "erro")
-            else:
-                linha = db.obter().execute("SELECT * FROM usuarios WHERE id = ?", (g.usuario["id"],)).fetchone()
-                _entrar(linha)  # mantém este aparelho conectado
-                log.info("“%s” trocou a própria senha", linha["usuario"])
-                flash("Senha alterada. Os outros aparelhos foram desconectados.", "ok")
-                return redirect(url_for("painel.lista"))
-    return render_template("senha.html")
+            _entrar(_buscar_usuario(db.obter(), g.usuario["id"]))  # mantém este aparelho conectado
+            log.info("“%s” trocou a própria senha", g.usuario["usuario"])
+            flash("Senha alterada. Os outros aparelhos foram desconectados.", "ok")
+    return redirect(url_for("auth.minha_conta"))
+
+
+@bp.route("/conta/2fa/ativar", methods=["POST"])
+@login_obrigatorio()
+def ativar_2fa():
+    segredo = g.usuario["totp_pendente"]
+    contador = segredo and totp.verificar(segredo, request.form.get("codigo", ""))
+    if not contador:
+        flash("Código incorreto. Confira se o aplicativo leu o QR code e tente de novo.", "erro")
+        return redirect(url_for("auth.minha_conta"))
+    conexao = db.obter()
+    with conexao:
+        conexao.execute(
+            "UPDATE usuarios SET totp_segredo = ?, totp_pendente = NULL, totp_ultimo = ?, token_sessao = ? WHERE id = ?",
+            (segredo, contador, secrets.token_hex(16), g.usuario["id"]),
+        )
+    _entrar(_buscar_usuario(conexao, g.usuario["id"]))
+    log.info("“%s” ativou a verificação em duas etapas", g.usuario["usuario"])
+    flash("Verificação em duas etapas ativada. Os outros aparelhos foram desconectados.", "ok")
+    return redirect(url_for("auth.minha_conta"))
+
+
+@bp.route("/conta/2fa/desativar", methods=["POST"])
+@login_obrigatorio()
+def desativar_2fa_proprio():
+    if not check_password_hash(g.usuario["senha_hash"], request.form.get("senha", "")):
+        flash("Senha incorreta.", "erro")
+    elif not totp.verificar(g.usuario["totp_segredo"] or "", request.form.get("codigo", ""), g.usuario["totp_ultimo"]):
+        flash("Código incorreto.", "erro")
+    else:
+        desativar_2fa(db.obter(), g.usuario["id"])
+        _entrar(_buscar_usuario(db.obter(), g.usuario["id"]))
+        log.info("“%s” desativou a verificação em duas etapas", g.usuario["usuario"])
+        flash("Verificação em duas etapas desativada.", "ok")
+    return redirect(url_for("auth.minha_conta"))
+
+
+# ---------------------------------------------------------------------------
+# Usuários da empresa (administradores)
+# ---------------------------------------------------------------------------
+
+def _usuario_da_empresa(conexao, usuario_id):
+    alvo = conexao.execute(
+        "SELECT * FROM usuarios WHERE id = ? AND empresa_id = ?", (usuario_id, g.empresa_id)
+    ).fetchone()
+    if alvo is None:
+        abort(404)
+    return alvo
 
 
 @bp.route("/usuarios")
 @login_obrigatorio("admin")
 def usuarios():
-    linhas = db.obter().execute("SELECT * FROM usuarios ORDER BY usuario").fetchall()
+    linhas = db.obter().execute(
+        "SELECT * FROM usuarios WHERE empresa_id = ? ORDER BY usuario", (g.empresa_id,)
+    ).fetchall()
     return render_template("usuarios.html", usuarios=linhas)
 
 
@@ -290,6 +459,7 @@ def novo_usuario():
     try:
         criar_usuario(
             db.obter(),
+            g.empresa_id,
             request.form.get("usuario", ""),
             request.form.get("senha", ""),
             request.form.get("papel", "editor"),
@@ -306,9 +476,7 @@ def novo_usuario():
 @login_obrigatorio("admin")
 def excluir_usuario(usuario_id):
     conexao = db.obter()
-    alvo = conexao.execute("SELECT * FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
-    if alvo is None:
-        abort(404)
+    alvo = _usuario_da_empresa(conexao, usuario_id)
     if alvo["id"] == g.usuario["id"]:
         flash("Você não pode excluir o próprio usuário.", "erro")
     else:
@@ -316,4 +484,16 @@ def excluir_usuario(usuario_id):
             conexao.execute("DELETE FROM usuarios WHERE id = ?", (usuario_id,))
         log.info("“%s” excluiu o usuário “%s”", g.usuario["usuario"], alvo["usuario"])
         flash("Usuário excluído.", "ok")
+    return redirect(url_for("auth.usuarios"))
+
+
+@bp.route("/usuarios/<int:usuario_id>/desativar-2fa", methods=["POST"])
+@login_obrigatorio("admin")
+def desativar_2fa_usuario(usuario_id):
+    """Para quando alguém perde o celular."""
+    conexao = db.obter()
+    alvo = _usuario_da_empresa(conexao, usuario_id)
+    desativar_2fa(conexao, usuario_id)
+    log.info("“%s” desativou a 2FA de “%s”", g.usuario["usuario"], alvo["usuario"])
+    flash(f"Verificação em duas etapas de “{alvo['usuario']}” desativada.", "ok")
     return redirect(url_for("auth.usuarios"))

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Minha conta{% endblock %}
+{% block classe_main %}medio{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>Verificação em duas etapas</h2>
+  {% if g.usuario.totp_segredo %}
+    <p><span class="selo no-ar">Ativada</span> Ao entrar, além da senha, é pedido o código do aplicativo autenticador.</p>
+    <details>
+      <summary>Desativar</summary>
+      <form action="{{ url_for('auth.desativar_2fa_proprio') }}" method="post" class="linha" style="margin-top:8px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div><label>Senha</label><input type="password" name="senha" required autocomplete="current-password"></div>
+        <div><label>Código do aplicativo</label><input type="text" name="codigo" inputmode="numeric" maxlength="7" required autocomplete="one-time-code"></div>
+        <div class="fixo"><button class="perigo" type="submit">Desativar</button></div>
+      </form>
+    </details>
+  {% else %}
+    <p><span class="selo fora">Desativada</span> Recomendado para todos, principalmente administradores: mesmo que alguém descubra sua senha, não consegue entrar sem o seu celular.</p>
+    <ol class="passos">
+      <li>Instale um aplicativo autenticador no celular (Google Authenticator, Microsoft Authenticator, Authy…).</li>
+      <li>No aplicativo, escolha “adicionar conta” e leia o QR code abaixo.</li>
+      <li>Digite o código de 6 dígitos que aparecer.</li>
+    </ol>
+    <div class="qr-2fa">
+      <img src="{{ qr }}" alt="QR code para o aplicativo autenticador" width="230" height="230">
+      <div>
+        <p class="dica">Não consegue ler o QR code? Digite esta chave no aplicativo:</p>
+        <p class="endereco">{{ segredo }}</p>
+        <form action="{{ url_for('auth.ativar_2fa') }}" method="post" class="linha">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div><label for="codigo">Código de 6 dígitos</label><input type="text" id="codigo" name="codigo" inputmode="numeric" maxlength="7" required autocomplete="one-time-code"></div>
+          <div class="fixo"><button type="submit">Ativar</button></div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Trocar minha senha</h2>
+  <form action="{{ url_for('auth.minha_senha') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="campo"><label for="atual">Senha atual</label><input type="password" id="atual" name="atual" autocomplete="current-password" required></div>
+    <div class="campo"><label for="nova">Nova senha (mínimo 8 caracteres)</label><input type="password" id="nova" name="nova" autocomplete="new-password" required minlength="8"></div>
+    <div class="campo"><label for="confirmacao">Repita a nova senha</label><input type="password" id="confirmacao" name="confirmacao" autocomplete="new-password" required minlength="8"></div>
+    <button type="submit">Salvar</button>
+  </form>
+</section>
+{% endblock %}

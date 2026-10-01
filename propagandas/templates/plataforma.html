@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block titulo %}Plataforma{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>Nova empresa (cliente)</h2>
+  <form action="{{ url_for('plataforma.nova') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="linha">
+      <div style="flex:2"><label for="nome">Nome da empresa</label><input type="text" id="nome" name="nome" required maxlength="100"></div>
+      <div><label for="limite_telas">Limite de telas</label><input type="number" id="limite_telas" name="limite_telas" min="0" placeholder="sem limite"></div>
+      <div><label for="limite_mb">Armazenamento (MB)</label><input type="number" id="limite_mb" name="limite_mb" min="0" placeholder="sem limite"></div>
+    </div>
+    <div class="linha" style="margin-top:8px">
+      <div><label for="usuario">Usuário do administrador do cliente</label><input type="text" id="usuario" name="usuario" required maxlength="50" autocomplete="off"></div>
+      <div><label for="senha">Senha inicial (mín. 8)</label><input type="password" id="senha" name="senha" required minlength="8" autocomplete="new-password"></div>
+      <div class="fixo"><button type="submit">Criar empresa</button></div>
+    </div>
+  </form>
+  <p class="dica" style="margin-bottom:0">Envie o usuário e a senha para o cliente. Recomende que ele troque a senha e ative a verificação em duas etapas em “Minha conta”.</p>
+</section>
+
+<section>
+  <h2>Empresas ({{ empresas|length }})</h2>
+  <div class="tabela-rolagem">
+    <table>
+      <thead>
+        <tr><th>Empresa</th><th class="numero">Telas (online)</th><th class="numero">Propagandas</th><th class="numero">Armazenamento</th><th class="numero">Usuários</th><th>Situação</th></tr>
+      </thead>
+      <tbody>
+        {% for e in empresas %}
+          {% set t = telas.get(e.id, {"total": 0, "online": 0}) %}
+          <tr>
+            <td><strong>{{ e.nome }}</strong>{% if e.id == principal %} <span class="selo">sua empresa</span>{% endif %}<br><span class="dica">desde {{ e.criado_em[:10] }}</span></td>
+            <td class="numero">{{ t.total }}{% if e.limite_telas is not none %}/{{ e.limite_telas }}{% endif %} ({{ t.online }})</td>
+            <td class="numero">{{ e.propagandas }}</td>
+            <td class="numero">{{ '%.1f'|format(e.bytes / MB) }} MB{% if e.limite_mb is not none %}/{{ e.limite_mb }}{% endif %}</td>
+            <td class="numero">{{ e.usuarios }}</td>
+            <td>{% if e.ativa %}<span class="selo no-ar">Ativa</span>{% else %}<span class="selo fora">Suspensa</span>{% endif %}</td>
+          </tr>
+          <tr>
+            <td colspan="6" style="border-top:0; padding-top:0">
+              <details>
+                <summary>Editar plano / suspender{% if e.id != principal %} / excluir{% endif %}</summary>
+                <form action="{{ url_for('plataforma.atualizar', empresa_id=e.id) }}" method="post" class="linha" style="margin-top:8px">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div style="flex:2"><label>Nome</label><input type="text" name="nome" value="{{ e.nome }}" maxlength="100"></div>
+                  <div><label>Limite de telas</label><input type="number" name="limite_telas" min="0" value="{{ e.limite_telas if e.limite_telas is not none else '' }}" placeholder="sem limite"></div>
+                  <div><label>Armazenamento (MB)</label><input type="number" name="limite_mb" min="0" value="{{ e.limite_mb if e.limite_mb is not none else '' }}" placeholder="sem limite"></div>
+                  {% if e.id != principal %}
+                    <div class="fixo"><label><input type="checkbox" name="ativa" {% if e.ativa %}checked{% endif %}> Ativa</label></div>
+                  {% endif %}
+                  <div class="fixo"><button type="submit">Salvar</button></div>
+                </form>
+                {% if e.id != principal %}
+                  <p class="dica">Suspender bloqueia o acesso ao painel e deixa as TVs do cliente sem propagandas. Os dados são mantidos.</p>
+                  <form action="{{ url_for('plataforma.excluir', empresa_id=e.id) }}" method="post" class="linha" data-confirmar="Excluir {{ e.nome }} e TODOS os dados (propagandas, telas, relatórios)? Isso não pode ser desfeito.">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div style="flex:2"><label>Para excluir, digite o nome da empresa</label><input type="text" name="confirmacao" autocomplete="off"></div>
+                    <div class="fixo"><button class="perigo" type="submit">Excluir empresa</button></div>
+                  </form>
+                {% endif %}
+              </details>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

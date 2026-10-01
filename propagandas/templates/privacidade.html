@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Política de Privacidade{% endblock %}
+{% block classe_main %}medio{% endblock %}
+{% block conteudo %}
+<section class="legal">
+  <div class="aviso modelo"><strong>Modelo.</strong> Este texto descreve o funcionamento real do sistema, mas precisa ser revisado por um advogado e completado com os dados de quem opera a plataforma (razão social, CNPJ, endereço e encarregado de dados) antes de ser usado com clientes.</div>
+
+  <h1>Política de Privacidade</h1>
+  <p>Esta política explica como o <strong>{{ config.NOME_PLATAFORMA }}</strong> trata dados pessoais, conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/2018, “LGPD”).</p>
+
+  <h2>1. Papéis</h2>
+  <p>Cada empresa cliente é <strong>controladora</strong> do conteúdo que publica e dos dados dos seus usuários. A operadora da plataforma atua como <strong>operadora</strong>, tratando esses dados apenas para prestar o serviço. Quando a própria operadora usa o sistema em seus estabelecimentos, ela é controladora desses dados.</p>
+
+  <h2>2. Dados tratados</h2>
+  <ul>
+    <li><strong>Usuários do painel:</strong> nome de usuário, senha (guardada somente em forma criptografada, com hash irreversível), papel de acesso e, se ativada, a chave da verificação em duas etapas.</li>
+    <li><strong>Registros de acesso e auditoria:</strong> data e hora, endereço IP e ações realizadas (entradas, tentativas de senha errada, envio, alteração e exclusão de propagandas). A guarda desses registros também atende ao Marco Civil da Internet (Lei nº 12.965/2014).</li>
+    <li><strong>Telas (TVs):</strong> endereço IP, identificação do navegador, horário do último contato e o registro das propagandas exibidas, com data, hora e duração.</li>
+    <li><strong>Conteúdo enviado:</strong> imagens, vídeos e textos publicados pela empresa cliente.</li>
+  </ul>
+  <p>O sistema <strong>não</strong> coleta dados das pessoas que assistem às telas: não usa câmeras, sensores, reconhecimento facial nem rastreamento do público.</p>
+
+  <h2>3. Finalidades e bases legais</h2>
+  <ul>
+    <li>Autenticar usuários e proteger as contas: execução de contrato e legítimo interesse (segurança).</li>
+    <li>Exibir as propagandas, monitorar as telas e gerar relatórios de exibição: execução de contrato.</li>
+    <li>Manter registros de acesso: cumprimento de obrigação legal e legítimo interesse (prevenção a fraudes).</li>
+  </ul>
+
+  <h2>4. Retenção</h2>
+  <ul>
+    <li>Histórico de exibições: {{ config.RETER_EXIBICOES_DIAS }} dias, depois apagado automaticamente.</li>
+    <li>Registros de acesso: {{ config.LOGS_DIAS }} dias, depois apagados automaticamente (o art. 15 do Marco Civil exige no mínimo 6 meses).</li>
+    <li>Backups: os {{ config.BACKUP_MANTER }} mais recentes, substituídos diariamente.</li>
+    <li>Dados da empresa: enquanto o contrato estiver ativo. Depois da exclusão da conta, são apagados, inclusive dos backups, conforme o rodízio acima.</li>
+  </ul>
+
+  <h2>5. Compartilhamento</h2>
+  <p>Os dados não são vendidos. Podem ser processados por fornecedores de infraestrutura (hospedagem, envio de e-mail) estritamente para operar o serviço, ou fornecidos a autoridades quando exigido por lei.</p>
+
+  <h2>6. Segurança</h2>
+  <p>Senhas com hash forte, verificação em duas etapas opcional, bloqueio após tentativas erradas, isolamento dos dados entre empresas, proteção contra ataques comuns da web, conexão criptografada (HTTPS, quando configurada) e backups diários.</p>
+
+  <h2>7. Seus direitos</h2>
+  <p>Você pode pedir confirmação do tratamento, acesso, correção, portabilidade e exclusão dos seus dados, além de informações sobre compartilhamento (art. 18 da LGPD). Administradores podem exportar todos os dados da empresa na página “Empresa”. Para os outros pedidos, entre em contato{% if config.CONTATO_PLATAFORMA %}: <strong>{{ config.CONTATO_PLATAFORMA }}</strong>{% else %} pelo canal informado pela operadora{% endif %}.</p>
+
+  <h2>8. Alterações</h2>
+  <p>Esta política pode ser atualizada. Mudanças relevantes serão comunicadas aos administradores das empresas clientes.</p>
+</section>
+{% endblock %}

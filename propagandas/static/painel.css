@@ -20,8 +20,8 @@ button.secundario, .botao.secundario { background: #e3e7ef; color: #1d2433; }
 button.perigo { background: #d93b3b; }
 .campo { margin-bottom: 14px; }
 .linha { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
-.linha > div { flex: 1; min-width: 140px; }
-.linha > div[style*="flex:0"] { flex: 0 0 auto; min-width: 0; }
+.linha > div { flex: 1 1 140px; min-width: 0; }
+.linha > .fixo { flex: 0 0 auto; }
 .item { display: grid; grid-template-columns: 140px 1fr; gap: 16px; border-top: 1px solid #eee; padding: 16px 0; }
 .item:first-of-type { border-top: 0; }
 .miniatura { width: 140px; height: 80px; object-fit: cover; border-radius: 6px; background: #000; }
@@ -37,7 +37,14 @@ button.perigo { background: #d93b3b; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid #eee; }
 td form { margin: 0; }
-@media (max-width: 600px) { .item { grid-template-columns: 1fr; } header { padding: 12px 16px; } }
+input[type=file] { max-width: 100%; }
+@media (max-width: 600px) {
+  .item { grid-template-columns: 1fr; }
+  header { padding: 12px 16px; }
+  /* No celular, cada campo ocupa a linha inteira. */
+  .linha > div { flex-basis: 100% !important; }
+  .linha > .fixo { flex-basis: auto !important; }
+}
 details { margin-top: 10px; border: 1px solid #e6e9f0; border-radius: 8px; padding: 8px 12px; }
 details summary { cursor: pointer; color: #2f6fed; font-size: .9rem; }
 .opcoes { display: flex; gap: 4px 14px; flex-wrap: wrap; margin: 6px 0 10px; }
@@ -57,3 +64,17 @@ details summary { cursor: pointer; color: #2f6fed; font-size: .9rem; }
 .tela:first-of-type { border-top: 0; }
 .numero { text-align: right; font-variant-numeric: tabular-nums; }
 .tabela-rolagem { overflow-x: auto; }
+.empresa-atual { font-size: .8rem; font-weight: 400; color: #aab3c5; margin-left: 10px; }
+main.medio { max-width: 720px; }
+footer { text-align: center; padding: 10px 16px 30px; font-size: .85rem; }
+footer a { color: #6b7385; }
+.passos { padding-left: 20px; line-height: 1.6; }
+.qr-2fa { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.qr-2fa img { background: #fff; border: 1px solid #e6e9f0; border-radius: 8px; }
+.qr-2fa > div { flex: 1; min-width: 240px; }
+.uso { height: 8px; background: #e6e9f0; border-radius: 4px; overflow: hidden; margin: 4px 0 2px; }
+.uso > span { display: block; height: 100%; background: #2f6fed; }
+.uso.cheio > span { background: #d93b3b; }
+.legal { line-height: 1.6; }
+.legal h2 { margin-top: 1.4em; }
+.aviso.modelo { background: #fff1d6; color: #8a5300; }

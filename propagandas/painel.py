@@ -17,7 +17,7 @@ from flask import (
     url_for,
 )
 
-from . import agenda, db
+from . import agenda, db, planos
 from .auth import login_obrigatorio
 from .midia import EXTENSOES, detectar_tipo, extensao_de
 
@@ -65,8 +65,11 @@ def destinos_por_propaganda(conexao):
         FROM propaganda_destinos d
         LEFT JOIN telas t ON t.id = d.tela_id
         LEFT JOIN grupos gr ON gr.id = d.grupo_id
+        JOIN propagandas p ON p.id = d.propaganda_id
+        WHERE p.empresa_id = ?
         ORDER BY gr.nome, t.nome
-        """
+        """,
+        (g.empresa_id,),
     )
     for linha in linhas:
         destino = resultado.setdefault(linha["propaganda_id"], {"telas": set(), "grupos": set(), "nomes": []})
@@ -80,7 +83,10 @@ def destinos_por_propaganda(conexao):
 
 
 def buscar(conexao, propaganda_id):
-    item = conexao.execute("SELECT * FROM propagandas WHERE id = ?", (propaganda_id,)).fetchone()
+    # Sempre filtrando pela empresa: o id na URL de outra empresa dá 404.
+    item = conexao.execute(
+        "SELECT * FROM propagandas WHERE id = ? AND empresa_id = ?", (propaganda_id, g.empresa_id)
+    ).fetchone()
     if item is None:
         abort(404)
     return item
@@ -90,18 +96,22 @@ def buscar(conexao, propaganda_id):
 @login_obrigatorio()
 def lista():
     conexao = db.obter()
-    itens = conexao.execute("SELECT * FROM propagandas ORDER BY posicao, id").fetchall()
+    itens = conexao.execute(
+        "SELECT * FROM propagandas WHERE empresa_id = ? ORDER BY posicao, id", (g.empresa_id,)
+    ).fetchall()
     agora = agenda.agora_local()
     return render_template(
         "propagandas.html",
         itens=itens,
         situacoes={item["id"]: agenda.situacao(item, agora) for item in itens},
         destinos=destinos_por_propaganda(conexao),
-        telas=conexao.execute("SELECT id, nome FROM telas ORDER BY nome").fetchall(),
-        grupos=conexao.execute("SELECT id, nome FROM grupos ORDER BY nome").fetchall(),
+        telas=conexao.execute("SELECT id, nome FROM telas WHERE empresa_id = ? ORDER BY nome", (g.empresa_id,)).fetchall(),
+        grupos=conexao.execute("SELECT id, nome FROM grupos WHERE empresa_id = ? ORDER BY nome", (g.empresa_id,)).fetchall(),
         dias=agenda.DIAS,
         agenda=agenda,
-        letreiro=db.ler_config("letreiro"),
+        letreiro=db.ler_config(g.empresa_id, "letreiro"),
+        empresa=planos.empresa(conexao, g.empresa_id),
+        uso=planos.uso(conexao, g.empresa_id),
         extensoes=", ".join(sorted(e.upper() for e in EXTENSOES)),
     )
 
@@ -131,12 +141,18 @@ def enviar():
         nome_disco = f"{uuid.uuid4().hex}.{extensao}"
         caminho = os.path.join(pasta, nome_disco)
         arquivo.save(caminho)
+        tamanho = os.path.getsize(caminho)
+        if not planos.cabe_no_armazenamento(conexao, g.empresa_id, tamanho):
+            os.remove(caminho)
+            flash(f"“{nome_original}” não foi enviado: o limite de armazenamento do seu plano foi atingido.", "erro")
+            continue
         try:
             with conexao:
                 conexao.execute(
-                    "INSERT INTO propagandas (nome, arquivo, tipo, duracao, posicao) "
-                    "VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(posicao), 0) + 1 FROM propagandas))",
-                    (nome_original, nome_disco, tipo, duracao),
+                    "INSERT INTO propagandas (empresa_id, nome, arquivo, tipo, tamanho, duracao, posicao) "
+                    "VALUES (?, ?, ?, ?, ?, ?, "
+                    "(SELECT COALESCE(MAX(posicao), 0) + 1 FROM propagandas WHERE empresa_id = ?))",
+                    (g.empresa_id, nome_original, nome_disco, tipo, tamanho, duracao, g.empresa_id),
                 )
         except Exception:
             os.remove(caminho)
@@ -163,8 +179,8 @@ def atualizar(propaganda_id):
     dias = "".join(d for d in agenda.TODOS_OS_DIAS if d in formulario.getlist("dias"))
     para_todas = formulario.get("destino", "todas") == "todas"
 
-    ids_telas = {r["id"] for r in conexao.execute("SELECT id FROM telas")}
-    ids_grupos = {r["id"] for r in conexao.execute("SELECT id FROM grupos")}
+    ids_telas = {r["id"] for r in conexao.execute("SELECT id FROM telas WHERE empresa_id = ?", (g.empresa_id,))}
+    ids_grupos = {r["id"] for r in conexao.execute("SELECT id FROM grupos WHERE empresa_id = ?", (g.empresa_id,))}
     telas_escolhidas = {int(v) for v in formulario.getlist("telas") if v.isdigit()} & ids_telas
     grupos_escolhidos = {int(v) for v in formulario.getlist("grupos") if v.isdigit()} & ids_grupos
 
@@ -187,7 +203,7 @@ def atualizar(propaganda_id):
             UPDATE propagandas
             SET nome = ?, duracao = ?, ativo = ?, inicio = ?, fim = ?,
                 dias_semana = ?, hora_inicio = ?, hora_fim = ?, para_todas = ?
-            WHERE id = ?
+            WHERE id = ? AND empresa_id = ?
             """,
             (
                 nome,
@@ -200,6 +216,7 @@ def atualizar(propaganda_id):
                 hora_fim,
                 1 if para_todas else 0,
                 propaganda_id,
+                g.empresa_id,
             ),
         )
         conexao.execute("DELETE FROM propaganda_destinos WHERE propaganda_id = ?", (propaganda_id,))
@@ -223,7 +240,9 @@ def mover(propaganda_id, direcao):
     if direcao not in ("cima", "baixo"):
         abort(404)
     conexao = db.obter()
-    itens = conexao.execute("SELECT id FROM propagandas ORDER BY posicao, id").fetchall()
+    itens = conexao.execute(
+        "SELECT id FROM propagandas WHERE empresa_id = ? ORDER BY posicao, id", (g.empresa_id,)
+    ).fetchall()
     ids = [linha["id"] for linha in itens]
     if propaganda_id not in ids:
         abort(404)
@@ -233,8 +252,8 @@ def mover(propaganda_id, direcao):
         ids[posicao], ids[destino] = ids[destino], ids[posicao]
         with conexao:
             conexao.executemany(
-                "UPDATE propagandas SET posicao = ? WHERE id = ?",
-                [(numero, item_id) for numero, item_id in enumerate(ids, start=1)],
+                "UPDATE propagandas SET posicao = ? WHERE id = ? AND empresa_id = ?",
+                [(numero, item_id, g.empresa_id) for numero, item_id in enumerate(ids, start=1)],
             )
     return redirect(url_for("painel.lista"))
 
@@ -245,7 +264,7 @@ def excluir(propaganda_id):
     conexao = db.obter()
     item = buscar(conexao, propaganda_id)
     with conexao:
-        conexao.execute("DELETE FROM propagandas WHERE id = ?", (propaganda_id,))
+        conexao.execute("DELETE FROM propagandas WHERE id = ? AND empresa_id = ?", (propaganda_id, g.empresa_id))
     caminho = os.path.join(current_app.config["PASTA_MIDIA"], item["arquivo"])
     if os.path.exists(caminho):
         os.remove(caminho)
@@ -258,7 +277,7 @@ def excluir(propaganda_id):
 @login_obrigatorio()
 def letreiro():
     texto = request.form.get("letreiro", "").strip()[:500]
-    db.gravar_config("letreiro", texto)
+    db.gravar_config(g.empresa_id, "letreiro", texto)
     log.info("“%s” alterou o letreiro", g.usuario["usuario"])
     flash("Letreiro salvo.", "ok")
     return redirect(url_for("painel.lista"))

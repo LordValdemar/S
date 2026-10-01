@@ -4,10 +4,11 @@
 {% block conteudo %}
 <section>
   <h2>Bem-vindo! Crie o administrador</h2>
-  <p class="dica">Este é o primeiro acesso. O usuário criado aqui poderá cadastrar propagandas e outros usuários.</p>
+  <p class="dica">Este é o primeiro acesso. O usuário criado aqui administra a sua empresa e também a plataforma (onde você cadastra clientes, se for revender o sistema).</p>
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="campo"><label for="usuario">Usuário</label><input type="text" id="usuario" name="usuario" autocomplete="username" required autofocus maxlength="50"></div>
+    <div class="campo"><label for="empresa">Nome da sua empresa</label><input type="text" id="empresa" name="empresa" maxlength="100" placeholder="Ex.: Padaria Pão Quente"></div>
+    <div class="campo"><label for="usuario">Usuário</label><input type="text" id="usuario" name="usuario" autocomplete="username" required maxlength="50"></div>
     <div class="campo"><label for="senha">Senha (mínimo 8 caracteres)</label><input type="password" id="senha" name="senha" autocomplete="new-password" required minlength="8"></div>
     <div class="campo"><label for="confirmacao">Repita a senha</label><input type="password" id="confirmacao" name="confirmacao" autocomplete="new-password" required minlength="8"></div>
     <button type="submit">Criar e entrar</button>

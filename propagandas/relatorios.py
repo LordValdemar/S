@@ -4,7 +4,7 @@ import csv
 import io
 from datetime import date, timedelta
 
-from flask import Blueprint, Response, render_template, request
+from flask import Blueprint, Response, g, render_template, request
 
 from . import agenda, db
 from .auth import login_obrigatorio
@@ -31,8 +31,8 @@ def _ler_filtros():
 
 
 def _where(de, ate, tela_id):
-    condicoes = ["e.exibido_em >= ?", "e.exibido_em < ?"]
-    parametros = [agenda.inicio_do_dia_utc(de), agenda.inicio_do_dia_utc(ate + timedelta(days=1))]
+    condicoes = ["e.empresa_id = ?", "e.exibido_em >= ?", "e.exibido_em < ?"]
+    parametros = [g.empresa_id, agenda.inicio_do_dia_utc(de), agenda.inicio_do_dia_utc(ate + timedelta(days=1))]
     if tela_id is not None:
         condicoes.append("e.tela_id = ?")
         parametros.append(tela_id)
@@ -78,7 +78,7 @@ def resumo():
         de=de,
         ate=ate,
         tela_id=tela_id,
-        telas=conexao.execute("SELECT id, nome FROM telas ORDER BY nome").fetchall(),
+        telas=conexao.execute("SELECT id, nome FROM telas WHERE empresa_id = ? ORDER BY nome", (g.empresa_id,)).fetchall(),
         por_propaganda=por_propaganda,
         por_tela=por_tela,
         total_exibicoes=sum(linha["exibicoes"] for linha in por_propaganda),

@@ -6,7 +6,7 @@
 {% endif %}
 
 <section>
-  <h2>Cadastrar tela</h2>
+  <h2>Cadastrar tela{% if empresa.limite_telas is not none %} <span class="dica">({{ uso.telas }} de {{ empresa.limite_telas }} do seu plano)</span>{% endif %}</h2>
   <form action="{{ url_for('telas.nova') }}" method="post" class="linha">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div style="flex:2"><label for="nome-tela">Nome</label><input type="text" id="nome-tela" name="nome" required maxlength="100" placeholder="Ex.: Loja Centro: Balcão"></div>
@@ -17,7 +17,7 @@
         {% for gr in grupos %}<option value="{{ gr.id }}">{{ gr.nome }}</option>{% endfor %}
       </select>
     </div>
-    <div style="flex:0"><button type="submit">Cadastrar</button></div>
+    <div class="fixo"><button type="submit">Cadastrar</button></div>
   </form>
   <p class="dica" style="margin-bottom:0">Cada tela recebe um endereço próprio. Abra esse endereço no navegador da TV. O painel passa a mostrar se ela está ligada, o que está exibindo e quantas vezes cada propaganda passou.</p>
 </section>
@@ -90,7 +90,7 @@
   <form action="{{ url_for('telas.novo_grupo') }}" method="post" class="linha">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div style="flex:3"><input type="text" name="nome" required maxlength="100" placeholder="Nome do grupo" aria-label="Nome do grupo"></div>
-    <div style="flex:0"><button type="submit">Criar grupo</button></div>
+    <div class="fixo"><button type="submit">Criar grupo</button></div>
   </form>
   {% if grupos %}
     <table style="margin-top:12px">
@@ -114,14 +114,14 @@
 
 <section>
   <h2>Alertas de tela offline</h2>
-  {% if canais %}
-    <p>Alertas ativos por: <strong>{{ canais|join(' e ') }}</strong>. Você é avisado quando uma tela fica mais de {{ config.ALERTA_OFFLINE_MIN }} minutos sem comunicação e quando ela volta.</p>
+  {% if canais.nomes %}
+    <p>Alertas ativos por: <strong>{{ canais.nomes|join(' e ') }}</strong>. Você é avisado quando uma tela fica mais de {{ config.ALERTA_OFFLINE_MIN }} minutos sem comunicação e quando ela volta.</p>
   {% else %}
-    <p class="dica">Nenhum canal configurado. Configure e-mail ou webhook (Slack, Teams, Discord…) pelas variáveis de ambiente descritas no README, na seção “Alertas”.</p>
+    <p class="dica">Nenhum canal configurado. Defina os e-mails ou o webhook (Slack, Teams, Discord…) em <a href="{{ url_for('empresa.configuracoes') }}">Empresa</a>.</p>
   {% endif %}
   <form action="{{ url_for('telas.testar_alerta') }}" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="secundario" {% if not canais %}disabled{% endif %}>Enviar alerta de teste</button>
+    <button class="secundario" {% if not canais.nomes %}disabled{% endif %}>Enviar alerta de teste</button>
   </form>
 </section>
 {% endblock %}

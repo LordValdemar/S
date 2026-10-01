@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block titulo %}Empresa{% endblock %}
+{% block classe_main %}medio{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>Dados da empresa</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="campo"><label for="nome">Nome</label><input type="text" id="nome" name="nome" value="{{ empresa.nome }}" maxlength="100" required></div>
+    <h3>Quem recebe os alertas de tela offline</h3>
+    <div class="campo">
+      <label for="alerta_emails">E-mails (separados por vírgula)</label>
+      <input type="text" id="alerta_emails" name="alerta_emails" value="{{ empresa.alerta_emails }}" placeholder="dono@loja.com.br, gerente@loja.com.br">
+      {% if not smtp_configurado %}<p class="dica">O envio de e-mails ainda não foi configurado no servidor. Use o webhook ou peça ao suporte.</p>{% endif %}
+    </div>
+    <div class="campo">
+      <label for="alerta_webhook">Webhook (Slack, Microsoft Teams, Discord, Google Chat)</label>
+      <input type="text" id="alerta_webhook" name="alerta_webhook" value="{{ empresa.alerta_webhook }}" placeholder="https://hooks.slack.com/services/...">
+    </div>
+    <button type="submit">Salvar</button>
+  </form>
+</section>
+
+<section>
+  <h2>Seu plano</h2>
+  <table>
+    <tbody>
+      <tr>
+        <td>Telas</td>
+        <td class="numero">{{ uso.telas }}{% if empresa.limite_telas is not none %} de {{ empresa.limite_telas }}{% else %} (sem limite){% endif %}</td>
+      </tr>
+      <tr>
+        <td>Armazenamento</td>
+        <td class="numero">{{ '%.1f'|format(uso.mb) }} MB{% if empresa.limite_mb is not none %} de {{ empresa.limite_mb }} MB{% else %} (sem limite){% endif %}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Seus dados</h2>
+  <p>Baixe uma cópia completa dos dados da empresa: propagandas (com os arquivos), telas, grupos, usuários e o histórico de exibições. As senhas não são incluídas.</p>
+  <a class="botao secundario" href="{{ url_for('empresa.exportar') }}">Exportar todos os dados (.zip)</a>
+  <p class="dica">Para excluir a conta e todos os dados, fale com o suporte{% if config.CONTATO_PLATAFORMA %}: {{ config.CONTATO_PLATAFORMA }}{% endif %}.</p>
+</section>
+{% endblock %}

@@ -14,19 +14,29 @@ from flask import (
 )
 
 from . import agenda, db
-from .auth import csrf_isento
+from .auth import EMPRESA_PRINCIPAL, csrf_isento
 
 bp = Blueprint("exibicao", __name__)
 
 UM_ANO = 365 * 24 * 3600
 MAX_REGISTROS_POR_ENVIO = 1000
+INTERVALO_CONTATO = 30  # segundos; evita gravar no banco a cada troca de propaganda
 
 
-def propagandas_no_ar(tela=None):
-    """Propagandas que devem aparecer agora na tela (ou no player geral, se tela=None)."""
+def empresa_ativa(empresa_id):
+    linha = db.obter().execute("SELECT ativa FROM empresas WHERE id = ?", (empresa_id,)).fetchone()
+    return bool(linha and linha["ativa"])
+
+
+def propagandas_no_ar(empresa_id, tela=None):
+    """Propagandas da empresa que devem aparecer agora na tela (ou no player geral, se tela=None)."""
+    if not empresa_ativa(empresa_id):
+        return []  # empresa suspensa: a TV fica sem propagandas
     conexao = db.obter()
     agora = agenda.agora_local()
-    itens = conexao.execute("SELECT * FROM propagandas ORDER BY posicao, id").fetchall()
+    itens = conexao.execute(
+        "SELECT * FROM propagandas WHERE empresa_id = ? ORDER BY posicao, id", (empresa_id,)
+    ).fetchall()
     permitidas = set()
     if tela is not None:
         permitidas = {
@@ -67,6 +77,10 @@ def _buscar_tela(codigo):
 
 
 def _registrar_contato(tela, **extras):
+    if not extras and tela["ultimo_contato"]:
+        segundos = (agenda.agora_utc() - agenda.de_texto_utc(tela["ultimo_contato"])).total_seconds()
+        if segundos < INTERVALO_CONTATO:
+            return
     campos = {
         "ultimo_contato": agenda.para_texto_utc(agenda.agora_utc()),
         "ultimo_ip": (request.remote_addr or "")[:45],
@@ -83,6 +97,7 @@ def _registrar_contato(tela, **extras):
 
 # ---------------------------------------------------------------------------
 # Player geral (sem cadastro de tela): mostra só o que é "para todas as telas"
+# da empresa principal. Mantido por compatibilidade com a primeira versão.
 # ---------------------------------------------------------------------------
 
 @bp.route("/player")
@@ -92,7 +107,7 @@ def player():
 
 @bp.route("/api/playlist")
 def playlist():
-    return _resposta_playlist(propagandas_no_ar(), db.ler_config("letreiro"))
+    return _resposta_playlist(propagandas_no_ar(EMPRESA_PRINCIPAL), db.ler_config(EMPRESA_PRINCIPAL, "letreiro"))
 
 
 # ---------------------------------------------------------------------------
@@ -115,8 +130,10 @@ def tela(codigo):
 def playlist_tela(codigo):
     tela = _buscar_tela(codigo)
     _registrar_contato(tela)
-    letreiro = tela["letreiro"] if tela["letreiro"] else db.ler_config("letreiro")
-    return _resposta_playlist(propagandas_no_ar(tela), letreiro)
+    if not empresa_ativa(tela["empresa_id"]):
+        return _resposta_playlist([], "")
+    letreiro = tela["letreiro"] if tela["letreiro"] else db.ler_config(tela["empresa_id"], "letreiro")
+    return _resposta_playlist(propagandas_no_ar(tela["empresa_id"], tela), letreiro)
 
 
 def _ler_registro(registro, agora, mais_antigo):
@@ -150,7 +167,10 @@ def pulso(codigo):
     registros = registros[:MAX_REGISTROS_POR_ENVIO]
 
     conexao = db.obter()
-    nomes = {linha["id"]: linha["nome"] for linha in conexao.execute("SELECT id, nome FROM propagandas")}
+    nomes = {
+        linha["id"]: linha["nome"]
+        for linha in conexao.execute("SELECT id, nome FROM propagandas WHERE empresa_id = ?", (tela["empresa_id"],))
+    }
     agora = agenda.agora_utc()
     mais_antigo = agora - timedelta(days=current_app.config["RETER_EXIBICOES_DIAS"])
 
@@ -160,12 +180,12 @@ def pulso(codigo):
         if lido:
             propaganda_id, inicio, duracao = lido
             nome = nomes.get(propaganda_id, "(propaganda excluída)")
-            linhas.append((tela["id"], propaganda_id, nome, inicio, duracao))
+            linhas.append((tela["empresa_id"], tela["id"], propaganda_id, nome, inicio, duracao))
     with conexao:
         # OR IGNORE: se a TV reenviar o mesmo registro (queda de rede), não duplica.
         conexao.executemany(
-            "INSERT OR IGNORE INTO exibicoes (tela_id, propaganda_id, propaganda_nome, exibido_em, duracao) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO exibicoes (empresa_id, tela_id, propaganda_id, propaganda_nome, exibido_em, duracao) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             linhas,
         )
 

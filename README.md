@@ -2,6 +2,8 @@
 
 Sistema de **sinalização digital** para exibir propagandas em TVs e monitores de estabelecimentos comerciais (padarias, lojas, restaurantes, consultórios…). Feito em **Python + Flask**.
 
+Serve para **usar nas suas lojas** e para **vender como serviço**: cada cliente é uma empresa com os dados isolados, e você administra todos pelo painel da plataforma.
+
 ## Recursos
 
 **Para quem usa**
@@ -17,16 +19,24 @@ Sistema de **sinalização digital** para exibir propagandas em TVs e monitores 
 - **Relatório de exibições** (proof of play): quantas vezes e por quanto tempo cada propaganda passou em cada tela, com filtro por período e tela e **exportação CSV** para o Excel. Serve para prestar contas a anunciantes.
 - As exibições são guardadas na própria TV quando a rede cai e enviadas quando ela volta, sem duplicar.
 
+**Para vender como serviço (multiempresa)**
+- Cada cliente é uma **empresa** com dados totalmente isolados: propagandas, telas, grupos, usuários, relatórios e alertas.
+- **Painel da plataforma** (só para você): criar clientes, definir o **plano** (limite de telas e de armazenamento), **suspender** por falta de pagamento (o painel é bloqueado e as TVs ficam sem propagandas, sem perder dados) e excluir.
+- Visão geral de todos os clientes: telas (online), propagandas, armazenamento e usuários.
+- Cada cliente configura os próprios alertas e pode **exportar todos os dados** (portabilidade, LGPD).
+- **Modelos** de Política de Privacidade e Termos de Uso, que precisam de revisão jurídica.
+
 **Para quem instala e mantém**
 - Servidor de produção (**Waitress**), que funciona em Linux, Windows, macOS e Raspberry Pi.
 - **Login com usuários e papéis**: *Administrador* (gerencia usuários) e *Editor* (cuida das propagandas).
 - Senhas guardadas com hash forte (scrypt). Trocar a senha desconecta os outros aparelhos.
+- **Verificação em duas etapas (2FA)** com aplicativo autenticador (Google Authenticator, Microsoft Authenticator, Authy…). Cada código só vale uma vez.
 - Bloqueio de login após 5 tentativas erradas em 15 minutos.
 - Proteção **CSRF**, cookies `HttpOnly`/`SameSite` e cabeçalhos de segurança (**CSP**, anti-clickjacking).
 - Arquivos enviados são conferidos **pelo conteúdo**, não só pela extensão, e salvos com nome aleatório.
 - Banco **SQLite** com migrações versionadas.
 - **Backup automático diário** (banco + mídias), guardando os últimos 7, com restauração por comando.
-- **Logs de auditoria** (quem enviou, alterou ou excluiu o quê, logins e tentativas erradas).
+- **Logs de auditoria** (quem enviou, alterou ou excluiu o quê, logins e tentativas erradas), guardados por 190 dias, conforme o Marco Civil da Internet.
 - Endereço `/saude` para monitoramento.
 - Início automático com o computador (systemd no Linux, script no Windows), **Docker** e modo quiosque para a TV.
 - Testes automáticos a cada envio ao GitHub (**GitHub Actions**, Python 3.10 a 3.13 + imagem Docker).
@@ -71,14 +81,32 @@ python servidor.py
 ## Primeiro acesso
 
 1. Abra **http://localhost:5000/** (ou `http://IP-DO-COMPUTADOR:5000/` de outro aparelho da rede).
-2. Crie o **usuário administrador**. Essa tela só aparece uma vez.
+2. Informe o nome da sua empresa e crie o **usuário administrador**. Essa tela só aparece uma vez. Esse usuário administra a sua empresa **e** a plataforma.
 3. Em **Telas**, cadastre cada TV (ex.: “Loja Centro: Balcão”). Cada uma recebe um **endereço próprio**, como `http://192.168.0.10:5000/tela/Ab3dE5fG7hJk`.
 4. Envie as propagandas. Em **Agendamento e telas**, escolha dias, horários e em quais telas cada uma aparece.
 5. Na TV, abra o endereço da tela e clique (ou aperte **F**) para tela cheia.
+6. Em **Minha conta**, ative a **verificação em duas etapas**.
 
 > O endereço da tela funciona como uma senha: quem não o tem não vê nem altera nada daquela tela. Se ele vazar, use **Gerar novo endereço**.
 >
-> O endereço geral `/player` continua funcionando, mas mostra só as propagandas marcadas para “Todas as telas” e **não** aparece no monitoramento nem nos relatórios.
+> O endereço geral `/player` continua funcionando, mas mostra só as propagandas da **sua** empresa marcadas para “Todas as telas” e **não** aparece no monitoramento nem nos relatórios.
+
+## Vendendo para clientes
+
+1. Em **Plataforma → Nova empresa**, informe o nome do cliente, o plano (limite de telas e de armazenamento em MB; em branco = sem limite) e o usuário e senha do administrador do cliente.
+2. Envie o endereço do painel, o usuário e a senha para o cliente. Ele entra, troca a senha, ativa a 2FA, cadastra as telas e envia as propagandas, sem ver nada das outras empresas.
+3. Para mudar de plano, edite os limites. Se o cliente não pagar, desmarque **Ativa** para suspender. Para reativar, marque de novo.
+4. Ao encerrar o contrato, peça que o cliente exporte os dados (**Empresa → Exportar**) e então exclua a empresa digitando o nome dela.
+
+**Antes de vender, confira:**
+- [ ] Servidor na internet (VPS ou nuvem) com **HTTPS** (veja “Acesso pela internet”) e backup copiado para **fora** do servidor.
+- [ ] `NOME_PLATAFORMA` e `CONTATO_PLATAFORMA` configurados (aparecem nas páginas legais).
+- [ ] **Política de Privacidade** (`/privacidade`) e **Termos de Uso** (`/termos`) revisados por um advogado e completados com razão social, CNPJ, preços e foro. Os textos ficam em `propagandas/templates/privacidade.html` e `termos.html`.
+- [ ] Contrato de prestação de serviço e emissão de nota fiscal.
+- [ ] Servidor de e-mail (SMTP) configurado, se os clientes forem receber alertas por e-mail.
+- [ ] 2FA ativada no seu usuário, que administra a plataforma.
+
+A cobrança ainda é manual: você cobra por fora e suspende ou reativa pelo painel.
 
 > Para descobrir o IP: no Linux, `hostname -I`; no Windows, `ipconfig` (procure “Endereço IPv4”).
 
@@ -98,9 +126,12 @@ O modo quiosque também libera o **som dos vídeos**. Sem ele, os navegadores bl
 ## Administração pela linha de comando
 
 ```bash
+python gerenciar.py listar-empresas
+python gerenciar.py criar-empresa "Mercado Bom Preço" --limite-telas 5 --limite-mb 2000
 python gerenciar.py listar-usuarios
-python gerenciar.py criar-usuario joao --papel editor
+python gerenciar.py criar-usuario joao --empresa 2 --papel editor
 python gerenciar.py trocar-senha dono        # esqueceu a senha? use este
+python gerenciar.py desativar-2fa dono       # perdeu o celular? use este
 python gerenciar.py backup                   # backup na hora
 python gerenciar.py restaurar dados/backups/backup-20261001-030000.zip
 ```
@@ -109,7 +140,9 @@ python gerenciar.py restaurar dados/backups/backup-20261001-030000.zip
 
 ## Alertas de tela offline
 
-Configure pelo menos um canal pelas variáveis de ambiente. Depois use **Telas → Enviar alerta de teste** para conferir.
+Cada empresa define quem recebe os alertas em **Empresa** (e-mails e/ou webhook). Depois use **Telas → Enviar alerta de teste** para conferir.
+
+O servidor de e-mail (SMTP) é da plataforma e vem das variáveis de ambiente abaixo. Na sua empresa (a principal), `ALERTA_EMAILS` e `ALERTA_WEBHOOK` valem quando a página **Empresa** está em branco.
 
 **Webhook** (Slack, Microsoft Teams, Discord, Google Chat ou qualquer serviço que receba JSON):
 
@@ -155,6 +188,9 @@ Os backups ficam no mesmo disco. Para proteção contra defeito no computador, c
 | `BACKUP_MANTER` | `7` | Quantos backups diários guardar (`0` desliga o backup automático) |
 | `FUSO_HORARIO` | `America/Sao_Paulo` | Fuso usado no agendamento e nos relatórios (ex.: `America/Manaus`) |
 | `RETER_EXIBICOES_DIAS` | `365` | Por quantos dias guardar o histórico de exibições |
+| `LOGS_DIAS` | `190` | Por quantos dias guardar os logs de acesso (o Marco Civil exige no mínimo 6 meses) |
+| `NOME_PLATAFORMA` | `Painel de Propagandas` | Nome exibido no topo e nas páginas legais (sua marca) |
+| `CONTATO_PLATAFORMA` | (vazio) | E-mail ou telefone de suporte, exibido nas páginas legais |
 | `ALERTA_OFFLINE_MIN` | `5` | Minutos sem comunicação até alertar |
 | `ALERTA_WEBHOOK` | (vazio) | URL do webhook de alertas |
 | `ALERTA_EMAILS` | (vazio) | E-mails que recebem alertas, separados por vírgula |
@@ -190,7 +226,12 @@ gerenciar.py             # comandos de administração
 propagandas/
 ├── __init__.py          # create_app: configuração, logs, segurança
 ├── db.py                # SQLite e migrações (para mudar o banco, adicione em MIGRACOES)
-├── auth.py              # login, usuários, papéis, CSRF, limite de tentativas
+├── auth.py              # login, 2FA, usuários, papéis, CSRF, limite de tentativas
+├── totp.py              # códigos da verificação em duas etapas (RFC 6238)
+├── empresa.py           # configurações da empresa e exportação dos dados
+├── plataforma.py        # administração das empresas clientes
+├── planos.py            # limites de telas e armazenamento
+├── legal.py             # páginas de privacidade e termos
 ├── painel.py            # cadastro das propagandas (agendamento e destinos)
 ├── agenda.py            # fuso horário e regras de agendamento
 ├── telas.py             # telas, grupos e monitoramento

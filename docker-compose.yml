@@ -10,6 +10,8 @@ services:
       - ./dados:/dados
     environment:
       FUSO_HORARIO: America/Sao_Paulo
+      NOME_PLATAFORMA: Painel de Propagandas
+      # CONTATO_PLATAFORMA: suporte@suaempresa.com.br
       # Alertas (opcional), veja o README:
       # ALERTA_WEBHOOK: https://hooks.slack.com/services/...
       # SMTP_HOST: smtp.gmail.com

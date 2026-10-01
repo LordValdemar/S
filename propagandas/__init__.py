@@ -10,12 +10,12 @@ Este pacote cria a aplicação Flask (create_app) com três partes:
 import logging
 import os
 import secrets
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 
 from flask import Flask, flash, redirect, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import agenda, auth, db, exibicao, painel, relatorios, telas
+from . import agenda, auth, db, empresa, exibicao, legal, painel, plataforma, relatorios, telas
 
 PASTA_PROJETO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -47,7 +47,11 @@ def montar_config(sobrescrever=None):
         "PERMANENT_SESSION_LIFETIME": 7 * 24 * 3600,  # 7 dias
         "ATRAS_DE_PROXY": _env_ligado("ATRAS_DE_PROXY"),
         "FUSO_HORARIO": os.environ.get("FUSO_HORARIO", "America/Sao_Paulo"),
+        # Identificação de quem opera a plataforma (aparece nas páginas legais)
+        "NOME_PLATAFORMA": os.environ.get("NOME_PLATAFORMA", "Painel de Propagandas"),
+        "CONTATO_PLATAFORMA": os.environ.get("CONTATO_PLATAFORMA", ""),
         "RETER_EXIBICOES_DIAS": int(os.environ.get("RETER_EXIBICOES_DIAS", 365)),
+        "LOGS_DIAS": int(os.environ.get("LOGS_DIAS", 190)),
         # Alertas de tela offline
         "ALERTA_OFFLINE_MIN": int(os.environ.get("ALERTA_OFFLINE_MIN", 5)),
         "ALERTA_EMAILS": os.environ.get("ALERTA_EMAILS", ""),
@@ -77,9 +81,11 @@ def _chave_secreta(pasta_dados):
 
 def _configurar_logs(app):
     formato = logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
-    arquivo = RotatingFileHandler(
+    # Um arquivo por dia, guardado por LOGS_DIAS (o Marco Civil da Internet pede
+    # que provedores de aplicação guardem os registros de acesso por 6 meses).
+    arquivo = TimedRotatingFileHandler(
         os.path.join(app.config["PASTA_LOGS"], "painel.log"),
-        maxBytes=2 * 1024 * 1024, backupCount=5, encoding="utf-8",
+        when="midnight", backupCount=app.config["LOGS_DIAS"], encoding="utf-8",
     )
     arquivo.setFormatter(formato)
     registro = logging.getLogger("propagandas")
@@ -111,6 +117,7 @@ def create_app(sobrescrever=None):
 
     _configurar_logs(app)
     db.migrar(app.config["BANCO"])
+    db.preencher_tamanhos(app.config["BANCO"], app.config["PASTA_MIDIA"])
     app.teardown_appcontext(db.fechar)
 
     auth.registrar(app)
@@ -118,6 +125,9 @@ def create_app(sobrescrever=None):
     app.register_blueprint(exibicao.bp)
     app.register_blueprint(telas.bp)
     app.register_blueprint(relatorios.bp)
+    app.register_blueprint(empresa.bp)
+    app.register_blueprint(plataforma.bp)
+    app.register_blueprint(legal.bp)
 
     app.jinja_env.filters["tempo_desde"] = agenda.tempo_desde
     app.jinja_env.filters["data_local"] = agenda.local_formatado

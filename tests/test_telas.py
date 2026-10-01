@@ -146,7 +146,7 @@ def test_telas_so_para_administrador(logado):
 
 def test_alerta_quando_tela_cai_e_volta(logado, monkeypatch):
     enviados = []
-    monkeypatch.setattr(alertas, "enviar_alerta", lambda mensagem, config=None: enviados.append(mensagem) or [])
+    monkeypatch.setattr(alertas, "enviar_alerta", lambda mensagem, canais, config=None: enviados.append(mensagem) or [])
     tela = criar_tela(logado, "Balcão")
     app = logado.application
 
@@ -180,9 +180,10 @@ def test_envio_real_por_webhook(app, monkeypatch):
         def read(self):
             return b"ok"
 
-    monkeypatch.setattr(alertas.urllib.request, "urlopen", lambda pedido, timeout: chamadas.append(pedido) or Resposta())
-    app.config["ALERTA_WEBHOOK"] = "https://exemplo.invalid/webhook"
-    assert alertas.enviar_alerta("teste", app.config) == []
+    monkeypatch.setattr(alertas._abridor, "open", lambda pedido, timeout: chamadas.append(pedido) or Resposta())
+    monkeypatch.setattr(alertas.socket, "getaddrinfo", lambda host, porta: [(0, 0, 0, "", ("8.8.8.8", porta))])
+    canais = {"emails": [], "webhook": "https://exemplo.invalid/webhook", "nomes": ["webhook"]}
+    assert alertas.enviar_alerta("teste", canais, app.config) == []
     assert b'"text": "teste"' in chamadas[0].data
 
 
@@ -219,7 +220,8 @@ def test_limpeza_de_exibicoes_antigas(logado):
             for dias in (1, 400):
                 momento = agenda.para_texto_utc(datetime.now(timezone.utc) - timedelta(days=dias))
                 conexao.execute(
-                    "INSERT INTO exibicoes (tela_id, propaganda_id, propaganda_nome, exibido_em, duracao) VALUES (?, 1, 'x', ?, 5)",
+                    "INSERT INTO exibicoes (empresa_id, tela_id, propaganda_id, propaganda_nome, exibido_em, duracao) "
+                    "VALUES (1, ?, 1, 'x', ?, 5)",
                     (tela["id"], momento),
                 )
         tarefas.limpar_exibicoes_antigas(app.config)
@@ -242,3 +244,23 @@ def test_migra_banco_da_versao_anterior(tmp_path):
         linha = db.obter().execute("SELECT * FROM propagandas").fetchone()
         assert linha["nome"] == "antiga" and linha["para_todas"] == 1 and linha["dias_semana"] == "0123456"
         assert db.obter().execute("PRAGMA user_version").fetchone()[0] == len(MIGRACOES)
+
+
+def test_webhook_nao_acessa_rede_interna(logado, monkeypatch):
+    """Proteção contra SSRF: um cliente não pode fazer o servidor chamar endereços internos."""
+    import pytest
+
+    def resolve_para(ip):
+        monkeypatch.setattr(alertas.socket, "getaddrinfo", lambda host, porta: [(0, 0, 0, "", (ip, porta))])
+
+    for ip in ("127.0.0.1", "10.0.0.5", "192.168.0.1", "169.254.169.254", "::1"):
+        resolve_para(ip)
+        with pytest.raises(alertas.EnderecoBloqueado):
+            alertas.validar_url_webhook("https://parece-legitimo.com/hook")
+    with pytest.raises(alertas.EnderecoBloqueado):
+        alertas.validar_url_webhook("http://exemplo.com/hook")  # sem HTTPS
+
+    resolve_para("169.254.169.254")
+    resposta = postar(logado, "/empresa", {"nome": "Minha", "alerta_webhook": "https://metadados.exemplo/x"}, pagina="/empresa")
+    assert "endereço interno" in resposta.get_data(as_text=True)
+    assert consultar(logado, "SELECT alerta_webhook FROM empresas WHERE id = 1")[0]["alerta_webhook"] == ""

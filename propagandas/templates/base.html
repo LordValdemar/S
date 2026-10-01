@@ -9,7 +9,10 @@
 </head>
 <body>
   <header>
-    <h1><a href="{{ url_for('painel.lista') }}">📺 Painel de Propagandas</a></h1>
+    <h1>
+      <a href="{{ url_for('painel.lista') }}">📺 {{ config.NOME_PLATAFORMA }}</a>
+      {% if g.usuario %}<span class="empresa-atual">{{ g.usuario.empresa_nome }}</span>{% endif %}
+    </h1>
     {% if g.usuario %}
       <nav>
         <a href="{{ url_for('painel.lista') }}" {% if request.endpoint == 'painel.lista' %}class="atual"{% endif %}>Propagandas</a>
@@ -20,7 +23,13 @@
         {% if g.usuario.papel == 'admin' %}
           <a href="{{ url_for('auth.usuarios') }}" {% if request.endpoint == 'auth.usuarios' %}class="atual"{% endif %}>Usuários</a>
         {% endif %}
-        <a href="{{ url_for('auth.minha_senha') }}" {% if request.endpoint == 'auth.minha_senha' %}class="atual"{% endif %}>Minha senha</a>
+        {% if g.usuario.papel == 'admin' %}
+          <a href="{{ url_for('empresa.configuracoes') }}" {% if request.endpoint == 'empresa.configuracoes' %}class="atual"{% endif %}>Empresa</a>
+        {% endif %}
+        {% if g.usuario.plataforma %}
+          <a href="{{ url_for('plataforma.lista') }}" {% if request.endpoint and request.endpoint.startswith('plataforma.') %}class="atual"{% endif %}>Plataforma</a>
+        {% endif %}
+        <a href="{{ url_for('auth.minha_conta') }}" {% if request.endpoint == 'auth.minha_conta' %}class="atual"{% endif %}>Minha conta</a>
         <form action="{{ url_for('auth.sair') }}" method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit">Sair ({{ g.usuario.usuario }})</button>
@@ -34,6 +43,10 @@
     {% endfor %}
     {% block conteudo %}{% endblock %}
   </main>
+  <footer>
+    <a href="{{ url_for('legal.privacidade') }}">Política de Privacidade</a> ·
+    <a href="{{ url_for('legal.termos') }}">Termos de Uso</a>
+  </footer>
   <script src="{{ url_for('static', filename='painel.js') }}"></script>
 </body>
 </html>
