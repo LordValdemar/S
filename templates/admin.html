@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel de Propagandas</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f2f4f7; color: #1d2433; }
+    header { background: #1d2433; color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    header h1 { margin: 0; font-size: 1.3rem; }
+    header a { color: #fff; background: #2f6fed; padding: 8px 14px; border-radius: 6px; text-decoration: none; }
+    main { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+    section { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    h2 { margin-top: 0; font-size: 1.1rem; }
+    label { font-size: .85rem; color: #555; display: block; margin-bottom: 4px; }
+    input[type=text], input[type=number], input[type=date] { padding: 7px; border: 1px solid #ccd; border-radius: 6px; width: 100%; }
+    button { padding: 8px 14px; border: 0; border-radius: 6px; background: #2f6fed; color: #fff; cursor: pointer; }
+    button.secundario { background: #e3e7ef; color: #1d2433; }
+    button.perigo { background: #d93b3b; }
+    .linha { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+    .linha > div { flex: 1; min-width: 140px; }
+    .item { display: grid; grid-template-columns: 140px 1fr; gap: 16px; border-top: 1px solid #eee; padding: 16px 0; }
+    .item:first-of-type { border-top: 0; }
+    .miniatura { width: 140px; height: 80px; object-fit: cover; border-radius: 6px; background: #000; }
+    .acoes { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .acoes form { margin: 0; }
+    .selo { font-size: .75rem; padding: 2px 8px; border-radius: 10px; }
+    .no-ar { background: #d6f5df; color: #17682f; }
+    .fora { background: #fde2e2; color: #9b1c1c; }
+    .vazio { color: #777; }
+    @media (max-width: 600px) { .item { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📺 Painel de Propagandas</h1>
+    <a href="{{ url_for('player') }}" target="_blank">Abrir tela de exibição</a>
+  </header>
+  <main>
+    <section>
+      <h2>Adicionar propagandas</h2>
+      <form action="{{ url_for('enviar') }}" method="post" enctype="multipart/form-data" class="linha">
+        <div style="flex:3">
+          <label>Imagens (JPG, PNG, GIF, WEBP) ou vídeos (MP4, WEBM)</label>
+          <input type="file" name="arquivos" multiple required accept="image/*,video/mp4,video/webm,video/ogg">
+        </div>
+        <div>
+          <label>Tempo de cada imagem (s)</label>
+          <input type="number" name="duracao" value="10" min="1" max="3600">
+        </div>
+        <div style="flex:0"><button type="submit">Enviar</button></div>
+      </form>
+    </section>
+
+    <section>
+      <h2>Letreiro (texto rolando no rodapé)</h2>
+      <form action="{{ url_for('atualizar_letreiro') }}" method="post" class="linha">
+        <div style="flex:4">
+          <input type="text" name="letreiro" value="{{ dados.letreiro }}" placeholder="Ex.: Promoção de pão francês: R$ 12,90 o kg! • Aceitamos PIX">
+        </div>
+        <div style="flex:0"><button type="submit">Salvar</button></div>
+      </form>
+      <p class="vazio" style="margin-bottom:0">Deixe em branco para esconder o letreiro.</p>
+    </section>
+
+    <section>
+      <h2>Sequência de exibição ({{ dados.itens|length }})</h2>
+      {% if not dados.itens %}
+        <p class="vazio">Nenhuma propaganda cadastrada ainda. Envie imagens ou vídeos acima.</p>
+      {% endif %}
+      {% for item in dados.itens %}
+        <div class="item">
+          <div>
+            {% if item.tipo == 'video' %}
+              <video class="miniatura" src="{{ url_for('midia', arquivo=item.arquivo) }}" muted preload="metadata"></video>
+            {% else %}
+              <img class="miniatura" src="{{ url_for('midia', arquivo=item.arquivo) }}" alt="">
+            {% endif %}
+            <div style="margin-top:6px">
+              {% if item.no_ar %}<span class="selo no-ar">No ar</span>{% else %}<span class="selo fora">Fora do ar</span>{% endif %}
+              <span class="selo" style="background:#e3e7ef">{{ 'Vídeo' if item.tipo == 'video' else 'Imagem' }}</span>
+            </div>
+          </div>
+          <div>
+            <form action="{{ url_for('atualizar_item', item_id=item.id) }}" method="post">
+              <div class="linha">
+                <div style="flex:2"><label>Nome</label><input type="text" name="nome" value="{{ item.nome }}"></div>
+                <div>
+                  <label>{{ 'Tempo (s) — vídeo toca até o fim' if item.tipo == 'video' else 'Tempo na tela (s)' }}</label>
+                  <input type="number" name="duracao" value="{{ item.duracao }}" min="1" max="3600">
+                </div>
+              </div>
+              <div class="linha" style="margin-top:8px">
+                <div><label>Começa em (opcional)</label><input type="date" name="inicio" value="{{ item.inicio }}"></div>
+                <div><label>Termina em (opcional)</label><input type="date" name="fim" value="{{ item.fim }}"></div>
+                <div><label><input type="checkbox" name="ativo" {% if item.ativo %}checked{% endif %}> Ativo</label></div>
+              </div>
+              <div class="acoes">
+                <button type="submit">Salvar</button>
+              </div>
+            </form>
+            <div class="acoes">
+              <form action="{{ url_for('mover_item', item_id=item.id, direcao='cima') }}" method="post"><button class="secundario" {% if loop.first %}disabled{% endif %}>↑ Subir</button></form>
+              <form action="{{ url_for('mover_item', item_id=item.id, direcao='baixo') }}" method="post"><button class="secundario" {% if loop.last %}disabled{% endif %}>↓ Descer</button></form>
+              <form action="{{ url_for('excluir_item', item_id=item.id) }}" method="post" onsubmit="return confirm('Excluir esta propaganda?')"><button class="perigo">Excluir</button></form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </section>
+  </main>
+</body>
+</html>
