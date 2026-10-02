@@ -193,6 +193,12 @@ A partir daí:
 
 ## 9. Problemas comuns
 
+**`.venv/bin/pip: command not found` ou `ensurepip is not available` ao instalar**: falta o pacote `python3-venv`, que o Ubuntu Server e o Debian não trazem. A versão atual do instalador resolve sozinha: atualize o projeto e rode de novo:
+```bash
+git pull
+sudo ./deploy/instalar-linux.sh
+```
+
 **A TV mostra “Tela não encontrada”**: o endereço foi digitado errado ou foi trocado em **Telas → Gerar novo endereço**. Copie o endereço de novo do painel.
 
 **A TV não abre o painel / fica tentando conectar**

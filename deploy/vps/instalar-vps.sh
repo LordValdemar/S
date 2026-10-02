@@ -88,7 +88,11 @@ chmod 750 "$PASTA/dados"
 
 # ---------------------------------------------------------------------------
 passo "Instalando as dependências do Python"
-[ -x "$PASTA/.venv/bin/python" ] || python3 -m venv "$PASTA/.venv"
+# Um ambiente criado pela metade (sem o pip) é apagado e criado de novo.
+if [ ! -x "$PASTA/.venv/bin/pip" ]; then
+  rm -rf "$PASTA/.venv"
+  python3 -m venv "$PASTA/.venv"
+fi
 "$PASTA/.venv/bin/pip" install --quiet --upgrade pip
 "$PASTA/.venv/bin/pip" install --quiet -r "$PASTA/requirements.txt"
 

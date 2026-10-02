@@ -14,7 +14,25 @@ fi
 echo "==> Pasta do programa: $PASTA"
 echo "==> Usuário do serviço: $USUARIO"
 
-if [ ! -x "$PASTA/.venv/bin/python" ]; then
+command -v python3 >/dev/null || { echo "Instale o Python 3: sudo apt install -y python3" >&2; exit 1; }
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' \
+  || { echo "É preciso Python 3.10 ou mais novo (use Ubuntu 22.04+, Debian 12+ ou Raspberry Pi OS 12+)." >&2; exit 1; }
+
+# O Ubuntu Server e o Debian não trazem o módulo venv completo (falta o ensurepip).
+if ! python3 -c 'import ensurepip, venv' 2>/dev/null; then
+  if command -v apt-get >/dev/null; then
+    echo "==> Instalando o python3-venv (necessário para o ambiente do Python)"
+    apt-get update -q
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv
+  else
+    echo "Instale o módulo venv do Python 3 (pacote python3-venv ou equivalente) e rode de novo." >&2
+    exit 1
+  fi
+fi
+
+# Um ambiente criado pela metade (sem o pip) é apagado e criado de novo.
+if [ ! -x "$PASTA/.venv/bin/pip" ]; then
+  [ -d "$PASTA/.venv" ] && echo "==> Ambiente virtual incompleto encontrado: recriando" && rm -rf "$PASTA/.venv"
   echo "==> Criando ambiente virtual"
   sudo -u "$USUARIO" python3 -m venv "$PASTA/.venv"
 fi
