@@ -165,6 +165,15 @@ if [ "$MODO_TESTE" -eq 1 ]; then
   # Certificado emitido por uma autoridade local do próprio Caddy, sem precisar de domínio público.
   sed -i "s#^\tencode gzip#\ttls internal\n\tencode gzip#" /etc/caddy/Caddyfile
 fi
+# www.dominio leva para o endereço principal, se o DNS do www já existir (senão o Caddy
+# ficaria tentando, sem sucesso, tirar o certificado de um nome que não aponta para cá).
+if [ "$MODO_TESTE" -eq 0 ] && [[ "$DOMINIO" != www.* ]] && getent ahostsv4 "www.$DOMINIO" >/dev/null; then
+  printf '\n# Gerado por deploy/vps/instalar-vps.sh: www leva para o endereço principal.\nwww.%s {\n\tredir https://%s{uri} permanent\n}\n' \
+    "$DOMINIO" "$DOMINIO" >> /etc/caddy/Caddyfile
+  echo "OK: www.$DOMINIO vai levar para https://$DOMINIO"
+elif [ "$MODO_TESTE" -eq 0 ] && [[ "$DOMINIO" != www.* ]]; then
+  echo "Dica: crie no DNS o registro www (CNAME para $DOMINIO) e rode este instalador de novo para o www também funcionar."
+fi
 if ! SAIDA_CADDY="$(caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1)"; then
   echo "$SAIDA_CADDY" >&2
   erro "a configuração do Caddy é inválida (veja acima)"
