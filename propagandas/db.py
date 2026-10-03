@@ -247,6 +247,10 @@ MIGRACOES = [
         recebido_em  TEXT NOT NULL
     );
     """,
+    # 5 - letreiro próprio por propaganda: NULL = usa o geral (ou o da tela), '' = sem letreiro.
+    """
+    ALTER TABLE propagandas ADD COLUMN letreiro TEXT;
+    """,
 ]
 
 
