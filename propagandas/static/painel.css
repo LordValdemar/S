@@ -78,3 +78,18 @@ footer a { color: #6b7385; }
 .legal { line-height: 1.6; }
 .legal h2 { margin-top: 1.4em; }
 .aviso.modelo { background: #fff1d6; color: #8a5300; }
+/* Plataforma: página pública, planos e início da loja */
+.vitrine h2 { font-size: 1.4rem; }
+.modulos-vitrine, .modulos-conta { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.modulos-vitrine section, .modulos-conta section { margin: 0; }
+.modulo.assinado { border-top: 4px solid #22a447; }
+.planos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 12px 0; }
+.plano { border: 2px solid #e3e7ef; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.plano.atual { border-color: #22a447; }
+.plano h3 { margin: 0; }
+.plano ul, section > ul { padding-left: 0; list-style: none; margin: 4px 0 8px; }
+.plano ul { flex: 1; }
+.preco { font-size: 1.6rem; font-weight: 700; }
+.preco span { font-size: .9rem; font-weight: 400; color: #6b7385; }
+.bloqueado { text-align: center; }
+label.marcar { display: flex; gap: 8px; align-items: flex-start; color: #1d2433; font-size: .9rem; margin: 6px 0 14px; }

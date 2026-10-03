@@ -4,6 +4,15 @@ Sistema de **sinalização digital** para exibir propagandas em TVs e monitores 
 
 Serve para **usar nas suas lojas** e para **vender como serviço**: cada cliente é uma empresa com os dados isolados, e você administra todos pelo painel da plataforma.
 
+## Plataforma de assinatura: Painel + Comanda
+
+O sistema tem dois **módulos**, e cada loja usa os do plano que assinou:
+
+- **Painel de Propagandas**: as propagandas nas TVs (tudo descrito abaixo).
+- **Comanda**: os garçons lançam os pedidos pelo celular, a cozinha acompanha numa tela que se atualiza sozinha (com aviso sonoro), e o caixa fecha a conta com taxa de serviço, desconto, conta dividida, troco e cupom de 80 mm. Tem também relatórios de vendas e histórico de cancelamentos e descontos.
+
+Com `CADASTRO_ABERTO=1`, a página inicial mostra os planos, e qualquer loja **cria a conta e assina pelo site** (Asaas: PIX, boleto ou cartão, com dias grátis configuráveis). A loja troca de plano ou cancela em **Minha loja**. Cada loja tem os **próprios usuários** (administrador, editor, garçom, cozinha, caixa), separados das outras, e um endereço de entrada próprio (`/entrar/codigo-da-loja`). O passo a passo está em [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md), seção 6.1.
+
 ## Recursos
 
 **Para quem usa**

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}Assinar {{ plano.nome }}{% endblock %}
+{% block classe_main %}estreito{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>{{ 'Trocar para o plano' if troca else 'Assinar o plano' }} {{ plano.nome }}</h2>
+  <div class="preco">{{ plano.preco_centavos|reais }}<span>/mês</span></div>
+  <ul>{% for m in lista_modulos %}<li>✔ {{ MODULOS[m] }}</li>{% endfor %}</ul>
+  {% if troca %}
+    <p class="dica">O novo valor vale para as próximas faturas (e para as que ainda estão em aberto). Os módulos mudam na hora.</p>
+  {% elif dias %}
+    <p class="dica">Os módulos liberam agora. A primeira fatura vence em {{ dias }} dias e chega no seu e-mail: pague por PIX, boleto ou cartão.</p>
+  {% else %}
+    <p class="dica">Os módulos liberam agora. A primeira fatura chega no seu e-mail: pague por PIX, boleto ou cartão.</p>
+  {% endif %}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="campo"><label for="documento">CPF ou CNPJ (vai na fatura)</label>
+      <input type="text" id="documento" name="documento" value="{{ empresa.documento }}" inputmode="numeric" maxlength="18" required></div>
+    <div class="campo"><label for="email">E-mail para as faturas</label>
+      <input type="email" id="email" name="email" value="{{ empresa.email_cobranca }}" maxlength="200" required></div>
+    <button type="submit">{{ 'Confirmar troca' if troca else 'Confirmar assinatura' }}</button>
+  </form>
+  <p><a href="{{ url_for('conta.inicio') }}">← Voltar</a></p>
+</section>
+{% endblock %}

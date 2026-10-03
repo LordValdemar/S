@@ -1,7 +1,9 @@
 """Acesso ao banco SQLite e migrações do esquema."""
 
 import os
+import re
 import sqlite3
+import unicodedata
 
 from flask import current_app, g
 
@@ -247,6 +249,128 @@ MIGRACOES = [
         recebido_em  TEXT NOT NULL
     );
     """,
+    # 5 - plataforma de assinatura: módulos (Painel e Comanda) por plano, código da loja
+    # e usuários por empresa. O nome de usuário passa a ser único só dentro da empresa
+    # (cada loja tem os seus: "joao" pode existir em várias), com papéis da Comanda.
+    """
+    ALTER TABLE planos ADD COLUMN modulos TEXT NOT NULL DEFAULT 'painel';   -- ex.: 'painel,comanda'
+    ALTER TABLE planos ADD COLUMN descricao TEXT NOT NULL DEFAULT '';
+
+    ALTER TABLE empresas ADD COLUMN slug TEXT;                               -- código da loja (login e endereço)
+    ALTER TABLE empresas ADD COLUMN modulos_liberados TEXT NOT NULL DEFAULT ''; -- liberados à mão pela plataforma
+    -- Quem já usava o sistema continua com o Painel, mesmo sem plano.
+    UPDATE empresas SET modulos_liberados = 'painel';
+    CREATE UNIQUE INDEX empresas_slug ON empresas(slug) WHERE slug IS NOT NULL;
+
+    CREATE TABLE usuarios_novo (
+        id            INTEGER PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        usuario       TEXT    NOT NULL COLLATE NOCASE,
+        senha_hash    TEXT    NOT NULL,
+        papel         TEXT    NOT NULL CHECK (papel IN ('admin', 'editor', 'caixa', 'garcom', 'cozinha')),
+        plataforma    INTEGER NOT NULL DEFAULT 0,
+        token_sessao  TEXT    NOT NULL,
+        totp_segredo  TEXT,
+        totp_pendente TEXT,
+        totp_ultimo   INTEGER NOT NULL DEFAULT 0,
+        criado_em     TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (empresa_id, usuario)
+    );
+    INSERT INTO usuarios_novo SELECT id, empresa_id, usuario, senha_hash, papel, plataforma, token_sessao,
+                                     totp_segredo, totp_pendente, totp_ultimo, criado_em FROM usuarios;
+    DROP TABLE usuarios;
+    ALTER TABLE usuarios_novo RENAME TO usuarios;
+    CREATE INDEX usuarios_empresa ON usuarios(empresa_id);
+    CREATE INDEX usuarios_nome ON usuarios(usuario);
+    """,
+    # 6 - Comanda (módulo de pedidos): cada tabela tem a empresa dona, e toda consulta filtra por ela.
+    # Dinheiro em centavos (inteiros) e datas em UTC.
+    """
+    CREATE TABLE cmd_categorias (
+        id          INTEGER PRIMARY KEY,
+        empresa_id  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome        TEXT    NOT NULL COLLATE NOCASE,
+        posicao     INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (empresa_id, nome)
+    );
+
+    CREATE TABLE cmd_produtos (
+        id              INTEGER PRIMARY KEY,
+        empresa_id      INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        categoria_id    INTEGER REFERENCES cmd_categorias(id) ON DELETE SET NULL,
+        codigo          TEXT,                         -- atalho opcional para lançar rápido
+        nome            TEXT    NOT NULL,
+        preco_centavos  INTEGER NOT NULL CHECK (preco_centavos >= 0),
+        vai_cozinha     INTEGER NOT NULL DEFAULT 1,   -- 0 = sai pronto (ex.: refrigerante em lata)
+        ativo           INTEGER NOT NULL DEFAULT 1,
+        criado_em       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (empresa_id, codigo)
+    );
+    CREATE INDEX cmd_produtos_empresa ON cmd_produtos(empresa_id);
+
+    CREATE TABLE cmd_comandas (
+        id                  INTEGER PRIMARY KEY,
+        empresa_id          INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        numero              INTEGER NOT NULL CHECK (numero > 0),
+        mesa                TEXT,
+        cliente             TEXT,
+        status              TEXT    NOT NULL DEFAULT 'aberta' CHECK (status IN ('aberta', 'fechada', 'cancelada')),
+        cobrar_taxa         INTEGER NOT NULL DEFAULT 1,
+        taxa_percentual     REAL    NOT NULL DEFAULT 0,
+        desconto_centavos   INTEGER NOT NULL DEFAULT 0 CHECK (desconto_centavos >= 0),
+        total_centavos      INTEGER,
+        aberta_por          INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        aberta_em           TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        fechada_por         INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        fechada_em          TEXT,
+        motivo_cancelamento TEXT
+    );
+    -- Um número só fica aberto uma vez por loja (o cartão volta a ser usado depois de fechado).
+    CREATE UNIQUE INDEX cmd_comandas_numero_aberta ON cmd_comandas(empresa_id, numero) WHERE status = 'aberta';
+    CREATE INDEX cmd_comandas_fechada_em ON cmd_comandas(empresa_id, fechada_em);
+
+    CREATE TABLE cmd_itens (
+        id                  INTEGER PRIMARY KEY,
+        empresa_id          INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        comanda_id          INTEGER NOT NULL REFERENCES cmd_comandas(id) ON DELETE CASCADE,
+        produto_id          INTEGER REFERENCES cmd_produtos(id) ON DELETE SET NULL,
+        nome                TEXT    NOT NULL,          -- cópia: o cardápio pode mudar depois
+        preco_centavos      INTEGER NOT NULL,
+        quantidade          INTEGER NOT NULL CHECK (quantidade BETWEEN 1 AND 999),
+        observacao          TEXT,
+        vai_cozinha         INTEGER NOT NULL,
+        status              TEXT    NOT NULL CHECK (status IN ('pendente', 'preparando', 'pronto', 'entregue', 'cancelado')),
+        lancado_por         INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        lancado_em          TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        cancelado_por       INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        motivo_cancelamento TEXT
+    );
+    CREATE INDEX cmd_itens_comanda ON cmd_itens(comanda_id);
+    CREATE INDEX cmd_itens_empresa_status ON cmd_itens(empresa_id, status);
+
+    CREATE TABLE cmd_pagamentos (
+        id                INTEGER PRIMARY KEY,
+        empresa_id        INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        comanda_id        INTEGER NOT NULL REFERENCES cmd_comandas(id) ON DELETE CASCADE,
+        forma             TEXT    NOT NULL CHECK (forma IN ('dinheiro', 'pix', 'debito', 'credito', 'outro')),
+        valor_centavos    INTEGER NOT NULL CHECK (valor_centavos > 0),
+        recebido_centavos INTEGER NOT NULL,
+        registrado_por    INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        registrado_em     TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX cmd_pagamentos_comanda ON cmd_pagamentos(comanda_id);
+
+    CREATE TABLE cmd_auditoria (
+        id          INTEGER PRIMARY KEY,
+        empresa_id  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        quando      TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        usuario_id  INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        comanda_id  INTEGER REFERENCES cmd_comandas(id) ON DELETE SET NULL,
+        acao        TEXT    NOT NULL,
+        detalhe     TEXT
+    );
+    """,
 ]
 
 
@@ -308,6 +432,29 @@ def gravar_config(empresa_id, chave, valor):
             "ON CONFLICT(empresa_id, chave) DO UPDATE SET valor = excluded.valor",
             (empresa_id, chave, valor),
         )
+
+
+def gerar_slug(conexao, nome, ignorar_id=None):
+    """Código da loja a partir do nome: "Padeiro Lanches" → "padeiro-lanches" (único)."""
+    base = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode().lower()
+    base = re.sub(r"[^a-z0-9]+", "-", base).strip("-")[:40].strip("-") or "loja"
+    candidato, numero = base, 2
+    while conexao.execute(
+        "SELECT 1 FROM empresas WHERE slug = ? AND id IS NOT ?", (candidato, ignorar_id)
+    ).fetchone():
+        candidato, numero = f"{base}-{numero}", numero + 1
+    return candidato
+
+
+def preencher_slugs(caminho_banco):
+    """Dá um código de loja às empresas criadas antes da versão com cadastro."""
+    conexao = conectar(caminho_banco)
+    try:
+        with conexao:
+            for linha in conexao.execute("SELECT id, nome FROM empresas WHERE slug IS NULL ORDER BY id").fetchall():
+                conexao.execute("UPDATE empresas SET slug = ? WHERE id = ?", (gerar_slug(conexao, linha["nome"], linha["id"]), linha["id"]))
+    finally:
+        conexao.close()
 
 
 def preencher_tamanhos(caminho_banco, pasta_midia):

@@ -184,8 +184,9 @@ def test_excluir_empresa_apaga_tudo(duas_empresas):
     assert consultar(dono, "SELECT * FROM empresas WHERE id = 1")
 
 
-def test_criar_empresa_com_usuario_repetido_nao_deixa_empresa_orfa(logado):
-    postar(logado, "/plataforma/empresas/nova", {"nome": "Repetida", "usuario": "admin", "senha": "senha-qualquer"},
+def test_criar_empresa_com_usuario_invalido_nao_deixa_empresa_orfa(logado):
+    # Senha curta demais: o usuário não é criado e a empresa também não pode ficar.
+    postar(logado, "/plataforma/empresas/nova", {"nome": "Repetida", "usuario": "admin", "senha": "curta"},
            pagina="/plataforma/")
     assert consultar(logado, "SELECT * FROM empresas WHERE nome = 'Repetida'") == []
 

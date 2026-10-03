@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titulo %}Minha loja{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>{{ empresa.nome }}</h2>
+  <p>Endereço de entrada da equipe: <span class="endereco">{{ url_for('auth.entrar_na_loja', slug=empresa.slug, _external=True) }}</span></p>
+  <p class="dica">Código da loja: <b>{{ empresa.slug }}</b>. Mande esse endereço para a equipe e peça para criarem o ícone na tela inicial do celular.</p>
+</section>
+
+<div class="modulos-conta">
+  {% for m, nome in MODULOS.items() %}
+    <section class="modulo {% if m in g.modulos_empresa %}assinado{% endif %}">
+      <h2>{{ '📺' if m == 'painel' else '🧾' }} {{ nome }}</h2>
+      <p>{{ DESCRICOES[m] }}</p>
+      {% if m in g.modulos %}
+        <a class="botao" href="{{ url_for('painel.lista') if m == 'painel' else url_for('comanda.lista') }}">Abrir</a>
+      {% elif m in g.modulos_empresa %}
+        <p class="dica">Sua loja tem este módulo, mas o seu papel não usa ele.</p>
+      {% elif g.usuario.papel == 'admin' %}
+        <a class="botao secundario" href="#planos">Assinar</a>
+      {% else %}
+        <p class="dica">Não assinado. Fale com o administrador da loja.</p>
+      {% endif %}
+    </section>
+  {% endfor %}
+</div>
+
+{% if not principal and g.usuario.papel == 'admin' %}
+<section id="planos">
+  <h2>Assinatura</h2>
+  {% if plano %}
+    <p>Plano atual: <b>{{ plano.nome }}</b> ({{ plano.preco_centavos|reais }}/mês).
+      {% if fatura_aberta %}Próxima fatura: {{ fatura_aberta.vencimento[8:10] }}/{{ fatura_aberta.vencimento[5:7] }} · <a href="{{ url_for('cobranca.pagamento') }}">ver faturas</a>{% else %}<a href="{{ url_for('cobranca.pagamento') }}">Ver faturas</a>{% endif %}</p>
+  {% else %}
+    <p>Sua loja ainda não tem plano. Escolha um para liberar os módulos.</p>
+  {% endif %}
+  {% if planos %}
+    <div class="planos">
+      {% for p in planos %}
+        <div class="plano {% if plano and plano.id == p.id %}atual{% endif %}">
+          <h3>{{ p.nome }}</h3>
+          <div class="preco">{{ p.preco_centavos|reais }}<span>/mês</span></div>
+          <ul>
+            {% for m in p.lista_modulos %}<li>✔ {{ MODULOS[m] }}</li>{% endfor %}
+            {% if 'painel' in p.lista_modulos %}<li>{{ p.limite_telas ~ ' TV(s)' if p.limite_telas else 'TVs sem limite' }}</li>{% endif %}
+          </ul>
+          {% if plano and plano.id == p.id %}
+            <span class="selo no-ar">Seu plano</span>
+          {% else %}
+            <a class="botao" href="{{ url_for('conta.assinar', plano_id=p.id) }}">{{ 'Trocar para este' if plano else 'Assinar' }}</a>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% if plano %}
+    <details>
+      <summary>Cancelar assinatura</summary>
+      <form action="{{ url_for('conta.cancelar') }}" method="post" data-confirmar="Cancelar a assinatura? Os módulos deixam de abrir; os dados continuam guardados.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <p class="dica">Nenhuma nova fatura será gerada. Os dados da loja continuam guardados, e dá para assinar de novo depois.</p>
+        <button class="perigo">Cancelar assinatura</button>
+      </form>
+    </details>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

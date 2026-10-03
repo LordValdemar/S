@@ -6,10 +6,11 @@ from datetime import date, timedelta
 
 from flask import Blueprint, Response, g, render_template, request
 
-from . import agenda, db
+from . import agenda, db, modulos
 from .auth import login_obrigatorio
 
 bp = Blueprint("relatorios", __name__)
+bp.before_request(modulos.exigir("painel"))  # só para lojas com o Painel no plano
 
 
 def _ler_filtros():

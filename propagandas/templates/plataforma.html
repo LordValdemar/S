@@ -15,11 +15,12 @@
   {% if planos %}
     <div class="tabela-rolagem">
       <table>
-        <thead><tr><th>Plano</th><th class="numero">Preço/mês</th><th class="numero">Telas</th><th class="numero">Armazenamento</th><th></th></tr></thead>
+        <thead><tr><th>Plano</th><th>Módulos</th><th class="numero">Preço/mês</th><th class="numero">Telas</th><th class="numero">Armazenamento</th><th></th></tr></thead>
         <tbody>
           {% for p in planos %}
             <tr>
-              <td>{{ p.nome }}{% if not p.ativo %} <span class="selo">inativo</span>{% endif %}</td>
+              <td>{{ p.nome }}{% if not p.ativo %} <span class="selo">inativo</span>{% endif %}{% if p.descricao %}<br><span class="dica">{{ p.descricao }}</span>{% endif %}</td>
+              <td>{% for m in ler_modulos(p.modulos) %}<span class="selo">{{ MODULOS[m] }}</span> {% endfor %}</td>
               <td class="numero">{{ p.preco_centavos|reais }}</td>
               <td class="numero">{{ p.limite_telas if p.limite_telas is not none else '∞' }}</td>
               <td class="numero">{{ (p.limite_mb ~ ' MB') if p.limite_mb is not none else '∞' }}</td>
@@ -32,7 +33,9 @@
                     <div><label>Preço (R$)</label><input type="text" name="preco" value="{{ '%.2f'|format(p.preco_centavos / 100)|replace('.', ',') }}" required inputmode="decimal"></div>
                     <div><label>Telas</label><input type="number" name="limite_telas" min="0" value="{{ p.limite_telas if p.limite_telas is not none else '' }}" placeholder="sem limite"></div>
                     <div><label>MB</label><input type="number" name="limite_mb" min="0" value="{{ p.limite_mb if p.limite_mb is not none else '' }}" placeholder="sem limite"></div>
-                    <div class="fixo"><label><input type="checkbox" name="ativo" {% if p.ativo %}checked{% endif %}> Ativo</label></div>
+<div class="fixo"><input type="hidden" name="modulos_enviados" value="1">{% for m, nome_m in MODULOS.items() %}<label><input type="checkbox" name="modulos" value="{{ m }}" {% if m in ler_modulos(p.modulos) %}checked{% endif %}> {{ nome_m }}</label> {% endfor %}</div>
+                    <div style="flex-basis:100%"><label>Descrição (aparece na página de planos)</label><input type="text" name="descricao" value="{{ p.descricao }}" maxlength="200"></div>
+                    <div class="fixo"><label><input type="checkbox" name="ativo" {% if p.ativo %}checked{% endif %}> Ativo (à venda)</label></div>
                     <div class="fixo"><button type="submit">Salvar</button></div>
                   </form>
                 </details>
@@ -49,6 +52,8 @@
     <div><label for="plano-preco">Preço/mês (R$)</label><input type="text" id="plano-preco" name="preco" required inputmode="decimal" placeholder="49,90"></div>
     <div><label for="plano-telas">Telas</label><input type="number" id="plano-telas" name="limite_telas" min="0" placeholder="sem limite"></div>
     <div><label for="plano-mb">Armazenamento (MB)</label><input type="number" id="plano-mb" name="limite_mb" min="0" placeholder="sem limite"></div>
+    <div class="fixo"><input type="hidden" name="modulos_enviados" value="1">{% for m, nome_m in MODULOS.items() %}<label><input type="checkbox" name="modulos" value="{{ m }}" {% if m == 'painel' %}checked{% endif %}> {{ nome_m }}</label> {% endfor %}</div>
+    <div style="flex-basis:100%"><label for="plano-descricao">Descrição (opcional)</label><input type="text" id="plano-descricao" name="descricao" maxlength="200" placeholder="Ex.: ideal para lanchonetes"></div>
     <div class="fixo"><button type="submit">Criar plano</button></div>
   </form>
 </section>
@@ -62,6 +67,7 @@
       <div><label for="limite_telas">Limite de telas</label><input type="number" id="limite_telas" name="limite_telas" min="0" placeholder="sem limite"></div>
       <div><label for="limite_mb">Armazenamento (MB)</label><input type="number" id="limite_mb" name="limite_mb" min="0" placeholder="sem limite"></div>
     </div>
+    <div class="linha" style="margin-top:8px"><span class="dica">Liberar sem plano (cobrança à parte):</span> <div class="fixo"><input type="hidden" name="modulos_enviados" value="1">{% for m, nome_m in MODULOS.items() %}<label><input type="checkbox" name="modulos" value="{{ m }}" {% if m == 'painel' %}checked{% endif %}> {{ nome_m }}</label> {% endfor %}</div></div>
     <div class="linha" style="margin-top:8px">
       <div><label for="usuario">Usuário do administrador do cliente</label><input type="text" id="usuario" name="usuario" required maxlength="50" autocomplete="off"></div>
       <div><label for="senha">Senha inicial (mín. 8)</label><input type="password" id="senha" name="senha" required minlength="8" autocomplete="new-password"></div>
@@ -82,7 +88,7 @@
         {% for e in empresas %}
           {% set t = telas.get(e.id, {"total": 0, "online": 0}) %}
           <tr>
-            <td><strong>{{ e.nome }}</strong>{% if e.id == principal %} <span class="selo">sua empresa</span>{% endif %}<br><span class="dica">desde {{ e.criado_em[:10] }}</span></td>
+            <td><strong>{{ e.nome }}</strong>{% if e.id == principal %} <span class="selo">sua empresa</span>{% endif %}<br><span class="dica">código {{ e.slug }} · desde {{ e.criado_em[:10] }}</span><br>{% for m in MODULOS if m in modulos_de[e.id] %}<span class="selo">{{ MODULOS[m] }}</span> {% else %}<span class="selo fora">sem módulos</span>{% endfor %}</td>
             <td class="numero">{{ t.total }}{% if e.limite_telas is not none %}/{{ e.limite_telas }}{% endif %} ({{ t.online }})</td>
             <td class="numero">{{ e.propagandas }}</td>
             <td class="numero">{{ '%.1f'|format(e.bytes / MB) }} MB{% if e.limite_mb is not none %}/{{ e.limite_mb }}{% endif %}</td>
@@ -160,6 +166,8 @@
                   <div><label>Armazenamento (MB)</label><input type="number" name="limite_mb" min="0" value="{{ e.limite_mb if e.limite_mb is not none else '' }}" placeholder="sem limite"></div>
                   {% if e.id != principal %}
                     <div class="fixo"><label><input type="checkbox" name="ativa" {% if e.ativa %}checked{% endif %}> Ativa</label></div>
+                    <div style="flex-basis:100%" class="dica">Liberar à mão, além do plano:</div>
+                    <div class="fixo"><input type="hidden" name="modulos_enviados" value="1">{% for m, nome_m in MODULOS.items() %}<label><input type="checkbox" name="modulos" value="{{ m }}" {% if m in ler_modulos(e.modulos_liberados) %}checked{% endif %}> {{ nome_m }}</label> {% endfor %}</div>
                   {% endif %}
                   <div class="fixo"><button type="submit">Salvar</button></div>
                 </form>

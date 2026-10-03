@@ -17,11 +17,12 @@ from flask import (
     url_for,
 )
 
-from . import agenda, db, planos
+from . import agenda, db, modulos, planos
 from .auth import login_obrigatorio
 from .midia import EXTENSOES, detectar_tipo, extensao_de
 
 bp = Blueprint("painel", __name__)
+bp.before_request(modulos.exigir("painel"))  # só para lojas com o Painel no plano
 log = logging.getLogger("propagandas.painel")
 
 DURACAO_PADRAO = 10

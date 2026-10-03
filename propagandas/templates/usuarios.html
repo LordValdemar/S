@@ -10,8 +10,15 @@
     <div>
       <label for="papel">Papel</label>
       <select id="papel" name="papel">
-        <option value="editor">Editor: cuida das propagandas</option>
-        <option value="admin">Administrador: também gerencia usuários</option>
+        {% if 'comanda' in g.modulos_empresa %}
+          <option value="garcom">Garçom: abre comandas e lança pedidos</option>
+          <option value="cozinha">Cozinha: só a tela da cozinha</option>
+          <option value="caixa">Caixa: fecha contas, cancela e vê as vendas</option>
+        {% endif %}
+        {% if 'painel' in g.modulos_empresa %}
+          <option value="editor">Editor: cuida das propagandas</option>
+        {% endif %}
+        <option value="admin">Administrador: tudo, inclusive equipe e assinatura</option>
       </select>
     </div>
     <div class="fixo"><button type="submit">Criar</button></div>
@@ -20,6 +27,7 @@
 
 <section>
   <h2>Usuários cadastrados</h2>
+  <p class="dica">Endereço de entrada da equipe: <span class="endereco">{{ url_for('auth.entrar_na_loja', slug=g.usuario.empresa_slug, _external=True) }}</span></p>
   <div class="tabela-rolagem">
   <table>
     <thead><tr><th>Usuário</th><th>Papel</th><th>Duas etapas</th><th>Desde</th><th></th></tr></thead>

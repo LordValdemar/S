@@ -5,7 +5,7 @@ import os
 
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import agenda, alertas, asaas, cobranca, db
+from . import agenda, alertas, asaas, cobranca, db, modulos
 from .auth import EMPRESA_PRINCIPAL, ErroUsuario, criar_usuario, plataforma_obrigatoria
 from .planos import MB
 
@@ -54,6 +54,9 @@ def lista():
             lista_empresa.append(fatura)
     return render_template(
         "plataforma.html",
+        MODULOS=modulos.MODULOS,
+        modulos_de={e["id"]: modulos.da_empresa(conexao, e["id"]) for e in empresas},
+        ler_modulos=modulos.ler,
         empresas=empresas,
         telas=resumo_telas,
         MB=MB,
@@ -81,8 +84,9 @@ def nova():
         return redirect(url_for("plataforma.lista"))
     with conexao:
         empresa_id = conexao.execute(
-            "INSERT INTO empresas (nome, limite_telas, limite_mb) VALUES (?, ?, ?)",
-            (nome, _ler_limite("limite_telas"), _ler_limite("limite_mb")),
+            "INSERT INTO empresas (nome, slug, limite_telas, limite_mb, modulos_liberados) VALUES (?, ?, ?, ?, ?)",
+            (nome, db.gerar_slug(conexao, nome), _ler_limite("limite_telas"), _ler_limite("limite_mb"),
+             modulos.do_formulario(request.form)),
         ).lastrowid
     try:
         criar_usuario(conexao, empresa_id, request.form.get("usuario", ""), request.form.get("senha", ""), "admin")
@@ -106,7 +110,8 @@ def atualizar(empresa_id):
         ativa = True  # a empresa principal (a sua) nunca é suspensa
     with conexao:
         conexao.execute(
-            "UPDATE empresas SET nome = ?, limite_telas = ?, limite_mb = ?, ativa = ?, motivo_suspensao = ? WHERE id = ?",
+            "UPDATE empresas SET nome = ?, limite_telas = ?, limite_mb = ?, ativa = ?, motivo_suspensao = ?, "
+            "modulos_liberados = ? WHERE id = ?",
             (
                 request.form.get("nome", "").strip()[:100] or empresa["nome"],
                 _ler_limite("limite_telas"),
@@ -114,6 +119,7 @@ def atualizar(empresa_id):
                 1 if ativa else 0,
                 # Mantém o motivo se nada mudou; suspensão feita aqui é sempre manual.
                 None if ativa else (empresa["motivo_suspensao"] if not empresa["ativa"] else "manual"),
+                modulos.do_formulario(request.form, empresa["modulos_liberados"]),
                 empresa_id,
             ),
         )

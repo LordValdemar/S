@@ -6,10 +6,17 @@
   <h2>Entrar</h2>
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="campo"><label for="usuario">Usuário</label><input type="text" id="usuario" name="usuario" value="{{ usuario }}" autocomplete="username" required autofocus></div>
+    {% if pedir_loja %}
+      <div class="campo"><label for="loja">Código da loja</label><input type="text" id="loja" name="loja" value="{{ loja }}" autocapitalize="none" autocomplete="organization" {% if not loja %}autofocus{% endif %}></div>
+    {% else %}
+      <input type="hidden" name="loja" value="{{ loja }}">
+    {% endif %}
+    <div class="campo"><label for="usuario">Usuário</label><input type="text" id="usuario" name="usuario" value="{{ usuario }}" autocapitalize="none" autocomplete="username" required {% if not pedir_loja or loja %}autofocus{% endif %}></div>
     <div class="campo"><label for="senha">Senha</label><input type="password" id="senha" name="senha" autocomplete="current-password" required></div>
     <button type="submit">Entrar</button>
   </form>
-  <p class="dica">Esqueceu a senha? Peça ao administrador da sua empresa.</p>
+  {% if not pedir_loja %}<p class="dica">Sua loja tem um endereço de entrada próprio? Use-o: o código da loja já vem preenchido.</p>{% endif %}
+  <p class="dica">Esqueceu a senha? Peça ao administrador da sua loja.</p>
+  {% if config.CADASTRO_ABERTO %}<p class="dica">Ainda não tem conta? <a href="{{ url_for('conta.cadastro') }}">Cadastre sua loja</a>.</p>{% endif %}
 </section>
 {% endblock %}

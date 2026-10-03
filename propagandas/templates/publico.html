@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}{% if so_planos %}Planos{% else %}Bem-vindo{% endif %}{% endblock %}
+{% block conteudo %}
+{% if not so_planos %}
+<section class="vitrine">
+  <h2>Sistemas para a sua loja, num lugar só</h2>
+  <p>Propagandas nas TVs e comanda eletrônica para bares, lanchonetes e restaurantes. Assine só o que precisa e use no navegador do celular, do tablet ou do computador, sem instalar nada.</p>
+  <p class="acoes">
+    {% if config.CADASTRO_ABERTO %}<a class="botao" href="{{ url_for('conta.cadastro') }}">Criar conta da loja</a>{% endif %}
+    <a class="botao secundario" href="{{ url_for('auth.login') }}">Já tenho conta: entrar</a>
+  </p>
+</section>
+<div class="modulos-vitrine">
+  <section>
+    <h2>📺 Painel de Propagandas</h2>
+    <p>Suas promoções nas TVs da loja: envie imagens e vídeos, programe dias e horários, acompanhe se cada TV está no ar e veja relatórios de exibição.</p>
+  </section>
+  <section>
+    <h2>🧾 Comanda</h2>
+    <p>Garçons lançam os pedidos pelo celular, a cozinha recebe na hora numa tela própria e o caixa fecha a conta com taxa de serviço, desconto, conta dividida e cupom.</p>
+  </section>
+</div>
+{% endif %}
+<section id="planos">
+  <h2>Planos</h2>
+  {% if planos %}
+    <div class="planos">
+      {% for p in planos %}
+        <div class="plano">
+          <h3>{{ p.nome }}</h3>
+          <div class="preco">{{ p.preco_centavos|reais }}<span>/mês</span></div>
+          <ul>
+            {% for m in p.lista_modulos %}<li>✔ {{ 'Painel de Propagandas' if m == 'painel' else 'Comanda' }}</li>{% endfor %}
+            {% if 'painel' in p.lista_modulos %}<li>{{ p.limite_telas ~ ' TV(s)' if p.limite_telas else 'TVs sem limite' }}</li>{% endif %}
+          </ul>
+          {% if p.descricao %}<p class="dica">{{ p.descricao }}</p>{% endif %}
+          {% if g.usuario and g.usuario.papel == 'admin' %}
+            <a class="botao" href="{{ url_for('conta.assinar', plano_id=p.id) }}">Assinar</a>
+          {% elif not g.usuario and config.CADASTRO_ABERTO %}
+            <a class="botao" href="{{ url_for('conta.cadastro', plano=p.id) }}">Começar</a>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {% if config.TESTE_GRATIS_DIAS %}<p class="dica">Os primeiros {{ config.TESTE_GRATIS_DIAS }} dias são grátis. Pague por PIX, boleto ou cartão. Cancele quando quiser.</p>{% endif %}
+  {% else %}
+    <p class="dica">Os planos ainda não foram cadastrados.</p>
+  {% endif %}
+</section>
+{% endblock %}

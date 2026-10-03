@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}{% endblock %} · {{ config.NOME_PLATAFORMA }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='painel.css') }}">
+  {% block cabeca %}{% endblock %}
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E📺%3C/text%3E%3C/svg%3E">
 </head>
-<body>
+<body class="{% block classe_body %}{% endblock %}" {% block atributos_body %}{% endblock %}>
   <header>
     <h1>
-      <a href="{{ url_for('painel.lista') }}">📺 {{ config.NOME_PLATAFORMA }}</a>
+      <a href="{{ url_for('painel.lista') }}">{{ config.NOME_PLATAFORMA }}</a>
       {% if g.usuario %}<span class="empresa-atual">{{ g.usuario.empresa_nome }}</span>{% endif %}
     </h1>
     {% if g.usuario and g.bloqueio_pagamento %}
@@ -22,22 +23,40 @@
         </form>
       </nav>
     {% elif g.usuario %}
+      {% set ep = request.endpoint or '' %}
+      {% set papel = g.usuario.papel %}
       <nav>
-        <a href="{{ url_for('painel.lista') }}" {% if request.endpoint == 'painel.lista' %}class="atual"{% endif %}>Propagandas</a>
-        {% if g.usuario.papel == 'admin' %}
-          <a href="{{ url_for('telas.lista') }}" {% if request.endpoint == 'telas.lista' %}class="atual"{% endif %}>Telas</a>
+        {% if 'painel' in g.modulos %}
+          <a href="{{ url_for('painel.lista') }}" {% if ep == 'painel.lista' %}class="atual"{% endif %}>Propagandas</a>
+          {% if papel == 'admin' %}
+            <a href="{{ url_for('telas.lista') }}" {% if ep == 'telas.lista' %}class="atual"{% endif %}>Telas</a>
+          {% endif %}
+          <a href="{{ url_for('relatorios.resumo') }}" {% if ep == 'relatorios.resumo' %}class="atual"{% endif %}>Relatórios</a>
         {% endif %}
-        <a href="{{ url_for('relatorios.resumo') }}" {% if request.endpoint == 'relatorios.resumo' %}class="atual"{% endif %}>Relatórios</a>
-        {% if g.usuario.papel == 'admin' %}
-          <a href="{{ url_for('auth.usuarios') }}" {% if request.endpoint == 'auth.usuarios' %}class="atual"{% endif %}>Usuários</a>
+        {% if 'comanda' in g.modulos %}
+          {% if papel in ('admin', 'caixa', 'garcom') %}
+            <a href="{{ url_for('comanda.lista') }}" {% if ep.startswith('comanda.') and ep != 'comanda.historico' %}class="atual"{% endif %}>Comandas</a>
+          {% endif %}
+          {% if papel in ('admin', 'caixa', 'cozinha') %}
+            <a href="{{ url_for('comanda_cozinha.tela') }}" {% if ep == 'comanda_cozinha.tela' %}class="atual"{% endif %}>Cozinha</a>
+          {% endif %}
+          {% if papel in ('admin', 'caixa') %}
+            <a href="{{ url_for('comanda.historico') }}" {% if ep == 'comanda.historico' %}class="atual"{% endif %}>Fechadas</a>
+            <a href="{{ url_for('comanda_relatorios.vendas') }}" {% if ep == 'comanda_relatorios.vendas' %}class="atual"{% endif %}>Vendas</a>
+          {% endif %}
+          {% if papel == 'admin' %}
+            <a href="{{ url_for('comanda_cardapio.lista') }}" {% if ep.startswith('comanda_cardapio.') or ep == 'comanda_ajustes.pagina' %}class="atual"{% endif %}>Cardápio</a>
+          {% endif %}
         {% endif %}
-        {% if g.usuario.papel == 'admin' %}
-          <a href="{{ url_for('empresa.configuracoes') }}" {% if request.endpoint == 'empresa.configuracoes' %}class="atual"{% endif %}>Empresa</a>
+        {% if papel == 'admin' %}
+          <a href="{{ url_for('auth.usuarios') }}" {% if ep == 'auth.usuarios' %}class="atual"{% endif %}>Usuários</a>
+          <a href="{{ url_for('empresa.configuracoes') }}" {% if ep == 'empresa.configuracoes' %}class="atual"{% endif %}>Empresa</a>
+          <a href="{{ url_for('conta.inicio') }}" {% if ep.startswith('conta.') %}class="atual"{% endif %}>Minha loja</a>
         {% endif %}
         {% if g.usuario.plataforma %}
-          <a href="{{ url_for('plataforma.lista') }}" {% if request.endpoint and request.endpoint.startswith('plataforma.') %}class="atual"{% endif %}>Plataforma</a>
+          <a href="{{ url_for('plataforma.lista') }}" {% if ep.startswith('plataforma.') %}class="atual"{% endif %}>Plataforma</a>
         {% endif %}
-        <a href="{{ url_for('auth.minha_conta') }}" {% if request.endpoint == 'auth.minha_conta' %}class="atual"{% endif %}>Minha conta</a>
+        <a href="{{ url_for('auth.minha_conta') }}" {% if ep == 'auth.minha_conta' %}class="atual"{% endif %}>Minha conta</a>
         <form action="{{ url_for('auth.sair') }}" method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit">Sair ({{ g.usuario.usuario }})</button>
@@ -53,9 +72,12 @@
         <a href="{{ url_for('cobranca.pagamento') }}">Ver fatura</a>
       </div>
     {% endif %}
+    {# As atualizações automáticas da Comanda não "gastam" os avisos: eles ficam para a próxima página. #}
+    {% if not request.headers.get('X-Atualizacao') %}
     {% for categoria, mensagem in get_flashed_messages(with_categories=true) %}
       <div class="aviso {{ categoria }}">{{ mensagem }}</div>
     {% endfor %}
+    {% endif %}
     {% block conteudo %}{% endblock %}
   </main>
   <footer>
@@ -63,5 +85,6 @@
     <a href="{{ url_for('legal.termos') }}">Termos de Uso</a>
   </footer>
   <script src="{{ url_for('static', filename='painel.js') }}"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

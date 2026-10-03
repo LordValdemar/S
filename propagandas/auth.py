@@ -21,12 +21,18 @@ from flask import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import db, totp
+from . import db, modulos, totp
 
 bp = Blueprint("auth", __name__)
 log = logging.getLogger("propagandas.auth")
 
-PAPEIS = {"admin": "Administrador", "editor": "Editor"}
+PAPEIS = {
+    "admin": "Administrador",   # tudo da loja: equipe, ajustes, assinatura e os módulos assinados
+    "editor": "Editor",         # Painel: propagandas
+    "caixa": "Caixa",           # Comanda: comandas, fechamento, cancelamentos e relatórios
+    "garcom": "Garçom",         # Comanda: abre comandas e lança pedidos
+    "cozinha": "Cozinha",       # Comanda: só a tela da cozinha
+}
 EMPRESA_PRINCIPAL = 1  # a empresa de quem instalou o sistema
 SENHA_MINIMA = 8
 MAX_TENTATIVAS = 5
@@ -56,9 +62,9 @@ def criar_usuario(conexao, empresa_id, usuario, senha, papel="editor", plataform
     validar_senha(senha)
     if conexao.execute("SELECT 1 FROM empresas WHERE id = ?", (empresa_id,)).fetchone() is None:
         raise ErroUsuario("Empresa não encontrada.")
-    # O nome de usuário é único em todo o sistema: o login não pergunta a empresa.
-    if conexao.execute("SELECT 1 FROM usuarios WHERE usuario = ?", (usuario,)).fetchone():
-        raise ErroUsuario(f"O usuário “{usuario}” já existe. Escolha outro nome.")
+    # O nome de usuário é único dentro da empresa: cada loja tem os seus ("joao" pode existir em várias).
+    if conexao.execute("SELECT 1 FROM usuarios WHERE empresa_id = ? AND usuario = ?", (empresa_id, usuario)).fetchone():
+        raise ErroUsuario(f"O usuário “{usuario}” já existe nesta loja. Escolha outro nome.")
     with conexao:
         cursor = conexao.execute(
             "INSERT INTO usuarios (empresa_id, usuario, senha_hash, papel, plataforma, token_sessao) "
@@ -141,7 +147,8 @@ def _verificar_csrf():
     rota = current_app.view_functions.get(request.endpoint)
     if getattr(rota, "csrf_isento", False):
         return
-    enviado = request.form.get("csrf_token", "")
+    # Formulários mandam o campo csrf_token; a tela da cozinha (fetch) manda o cabeçalho.
+    enviado = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token", "")
     esperado = session.get("csrf", "")
     if not esperado or not hmac.compare_digest(enviado, esperado):
         log.warning("CSRF inválido em %s vindo de %s", request.path, request.remote_addr)
@@ -150,7 +157,7 @@ def _verificar_csrf():
 
 def _buscar_usuario(conexao, usuario_id):
     return conexao.execute(
-        "SELECT u.*, e.nome AS empresa_nome, e.ativa AS empresa_ativa, e.motivo_suspensao "
+        "SELECT u.*, e.nome AS empresa_nome, e.slug AS empresa_slug, e.ativa AS empresa_ativa, e.motivo_suspensao "
         "FROM usuarios u JOIN empresas e ON e.id = u.empresa_id WHERE u.id = ?",
         (usuario_id,),
     ).fetchone()
@@ -164,7 +171,7 @@ def suspensa_por_pagamento(linha):
 # Páginas liberadas para empresas suspensas por falta de pagamento.
 LIBERADAS_SEM_PAGAMENTO = {
     "cobranca.pagamento", "auth.sair", "auth.minha_conta", "auth.minha_senha", "auth.ativar_2fa",
-    "auth.desativar_2fa_proprio", "legal.privacidade", "legal.termos", "static",
+    "auth.desativar_2fa_proprio", "legal.privacidade", "legal.termos", "static", "conta.inicio",
 }
 
 
@@ -226,11 +233,11 @@ def plataforma_obrigatoria(funcao):
     return verificar
 
 
-def _destino_seguro(proximo):
+def _destino_seguro(proximo, usuario):
     # Evita redirecionar para outro site (open redirect).
     if proximo and proximo.startswith("/") and not proximo.startswith("//") and "\\" not in proximo:
         return proximo
-    return url_for("painel.lista")
+    return modulos.pagina_inicial(usuario, modulos.do_usuario(usuario, modulos.da_empresa(db.obter(), usuario["empresa_id"])))
 
 
 def _entrar(usuario):
@@ -245,6 +252,7 @@ def registrar(app):
     app.before_request(_verificar_csrf)
     app.before_request(_carregar_usuario)
     app.before_request(_restringir_se_bloqueado)
+    app.before_request(modulos.carregar)
     app.jinja_env.globals["csrf_token"] = token_csrf
     app.jinja_env.globals["PAPEIS"] = PAPEIS
 
@@ -292,8 +300,9 @@ def login():
     conexao = db.obter()
     if not existe_usuario(conexao):
         return redirect(url_for("auth.configurar"))
+    loja = (request.form.get("loja") or request.args.get("loja") or "").strip().lower()
     if g.usuario is not None:
-        return redirect(url_for("painel.lista"))
+        return redirect(modulos.pagina_inicial())
 
     if request.method == "POST":
         ip = request.remote_addr or "?"
@@ -301,18 +310,27 @@ def login():
         if _bloqueado(ip):
             log.warning("Login bloqueado por excesso de tentativas (IP %s)", ip)
             flash("Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.", "erro")
-            return render_template("login.html", usuario=usuario), 429
+            return render_template("login.html", usuario=usuario, loja=loja), 429
 
-        linha = conexao.execute(
-            "SELECT u.*, e.ativa AS empresa_ativa, e.motivo_suspensao FROM usuarios u "
-            "JOIN empresas e ON e.id = u.empresa_id WHERE u.usuario = ?",
-            (usuario,),
-        ).fetchone()
-        if linha and check_password_hash(linha["senha_hash"], request.form.get("senha", "")):
+        consulta = ("SELECT u.*, e.ativa AS empresa_ativa, e.motivo_suspensao FROM usuarios u "
+                    "JOIN empresas e ON e.id = u.empresa_id WHERE u.usuario = ?")
+        if loja:
+            candidatos = conexao.execute(consulta + " AND e.slug = ?", (usuario, loja)).fetchall()
+        else:
+            candidatos = conexao.execute(consulta, (usuario,)).fetchall()
+        # O mesmo nome pode existir em várias lojas: vale a que tem esta senha. A senha é conferida
+        # antes de pedir o código da loja, para não revelar a quem não sabe a senha que o nome existe.
+        senha = request.form.get("senha", "")
+        certos = [c for c in candidatos if check_password_hash(c["senha_hash"], senha)]
+        if len(certos) > 1:
+            flash("Este usuário e senha existem em mais de uma loja. Informe também o código da sua loja.", "erro")
+            return render_template("login.html", usuario=usuario, loja=loja, pedir_loja=True), 401
+        linha = certos[0] if certos else None
+        if linha:
             if not linha["empresa_ativa"] and not linha["plataforma"] and not suspensa_por_pagamento(linha):
                 log.warning("Login recusado: empresa suspensa (“%s”, IP %s)", usuario, ip)
                 flash("O acesso desta empresa está suspenso. Fale com o suporte.", "erro")
-                return render_template("login.html", usuario=usuario), 403
+                return render_template("login.html", usuario=usuario, loja=loja), 403
             proximo = request.args.get("proximo")
             if linha["totp_segredo"]:
                 # Senha certa, mas ainda falta o código do aplicativo.
@@ -324,14 +342,22 @@ def login():
             _limpar_falhas(ip)
             _entrar(linha)
             log.info("Login de “%s” (IP %s)", linha["usuario"], ip)
-            return redirect(_destino_seguro(proximo))
+            return redirect(_destino_seguro(proximo, linha))
 
         _registrar_falha(ip)
         log.warning("Senha errada para “%s” (IP %s)", usuario, ip)
         flash("Usuário ou senha incorretos.", "erro")
-        return render_template("login.html", usuario=usuario), 401
+        return render_template("login.html", usuario=usuario, loja=loja, pedir_loja=bool(loja)), 401
 
-    return render_template("login.html", usuario="")
+    return render_template("login.html", usuario="", loja=loja, pedir_loja=bool(loja))
+
+
+@bp.route("/entrar/<slug>")
+def entrar_na_loja(slug):
+    """Endereço de login de cada loja (o código já vem preenchido): bom para o ícone no celular da equipe."""
+    if db.obter().execute("SELECT 1 FROM empresas WHERE slug = ?", (slug.lower(),)).fetchone() is None:
+        abort(404)
+    return redirect(url_for("auth.login", loja=slug.lower()))
 
 
 @bp.route("/login/codigo", methods=["GET", "POST"])
@@ -359,7 +385,7 @@ def login_codigo():
             _limpar_falhas(ip)
             _entrar(linha)
             log.info("Login de “%s” com 2FA (IP %s)", linha["usuario"], ip)
-            return redirect(_destino_seguro(proximo))
+            return redirect(_destino_seguro(proximo, linha))
         _registrar_falha(ip)
         log.warning("Código 2FA errado (usuário id %s, IP %s)", usuario_id, ip)
         flash("Código incorreto ou já usado. Confira o aplicativo e tente de novo.", "erro")
@@ -474,6 +500,15 @@ def usuarios():
     return render_template("usuarios.html", usuarios=linhas)
 
 
+def _papel_permitido(papel):
+    """Só papéis dos módulos que a loja tem (admin sempre); papel desconhecido cai no criar_usuario."""
+    if papel == "admin" or papel not in PAPEIS:
+        return papel
+    if any(papel in modulos.PAPEIS_DO_MODULO[m] for m in g.modulos_empresa):
+        return papel
+    raise ErroUsuario("Este papel é de um módulo que sua loja não assinou.")
+
+
 @bp.route("/usuarios/novo", methods=["POST"])
 @login_obrigatorio("admin")
 def novo_usuario():
@@ -483,7 +518,7 @@ def novo_usuario():
             g.empresa_id,
             request.form.get("usuario", ""),
             request.form.get("senha", ""),
-            request.form.get("papel", "editor"),
+            _papel_permitido(request.form.get("papel", "editor")),
         )
     except ErroUsuario as erro:
         flash(str(erro), "erro")

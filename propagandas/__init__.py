@@ -15,7 +15,7 @@ from logging.handlers import TimedRotatingFileHandler
 from flask import Flask, flash, g, redirect, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import agenda, auth, cobranca, db, empresa, exibicao, legal, painel, plataforma, relatorios, telas
+from . import agenda, auth, cobranca, comanda, conta, db, empresa, exibicao, legal, painel, plataforma, relatorios, telas
 
 PASTA_PROJETO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -67,6 +67,9 @@ def montar_config(sobrescrever=None):
         "ASAAS_WEBHOOK_TOKEN": os.environ.get("ASAAS_WEBHOOK_TOKEN", ""),
         "ASAAS_URL": os.environ.get("ASAAS_URL", ""),  # opcional: outro endereço da API (testes)
         "COBRANCA_TOLERANCIA_DIAS": int(os.environ.get("COBRANCA_TOLERANCIA_DIAS", 5)),
+        # Plataforma de assinatura: qualquer pessoa cria a conta da loja e assina pelo site.
+        "CADASTRO_ABERTO": _env_ligado("CADASTRO_ABERTO"),
+        "TESTE_GRATIS_DIAS": int(os.environ.get("TESTE_GRATIS_DIAS", 7)),  # dias até a primeira fatura
     }
     config.update(sobrescrever)
     return config
@@ -124,6 +127,7 @@ def create_app(sobrescrever=None):
     _configurar_logs(app)
     db.migrar(app.config["BANCO"])
     db.preencher_tamanhos(app.config["BANCO"], app.config["PASTA_MIDIA"])
+    db.preencher_slugs(app.config["BANCO"])
     app.teardown_appcontext(db.fechar)
 
     auth.registrar(app)
@@ -135,6 +139,8 @@ def create_app(sobrescrever=None):
     app.register_blueprint(plataforma.bp)
     app.register_blueprint(legal.bp)
     app.register_blueprint(cobranca.bp)
+    app.register_blueprint(conta.bp)
+    comanda.registrar(app)
 
     app.jinja_env.filters["tempo_desde"] = agenda.tempo_desde
     app.jinja_env.filters["data_local"] = agenda.local_formatado

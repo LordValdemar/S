@@ -47,6 +47,8 @@ Isso cria `painel.sualoja.com.br`. Pode levar de alguns minutos a algumas horas 
 nslookup painel.sualoja.com.br     # deve mostrar o IP da VPS
 ```
 
+> **Domínio na Cloudflare** (ex.: `comercialgustavo.com.br`): o registro é criado em *DNS → Registros → Adicionar registro*, no painel da Cloudflare, e não no registro.br. Deixe a **nuvem cinza** ("Somente DNS"): o próprio servidor emite o certificado HTTPS. Para usar o domínio principal (sem `painel.` na frente), use `@` como nome, e crie também um `CNAME` chamado `www` apontando para o domínio.
+
 ---
 
 ## 3. Acessar o servidor e protegê-lo
@@ -173,6 +175,70 @@ sudo systemctl restart painel-propagandas
 Quando tudo estiver certo, gere a chave de **produção** na conta real, troque `ASAAS_API_KEY` e use `ASAAS_AMBIENTE=producao`. Cadastre o mesmo webhook na conta real e reinicie o serviço.
 
 ---
+
+## 6.1 Plataforma de assinatura: planos, Comanda e cadastro aberto
+
+O sistema tem dois módulos: o **Painel de Propagandas** e a **Comanda** (pedidos pelo celular dos garçons, tela da cozinha e caixa). Cada loja usa os módulos do plano que assinou. Cada loja tem os próprios usuários, separados das outras lojas: o garçom "joao" de uma lanchonete não tem nada a ver com o "joao" de outra.
+
+### Crie os planos
+
+Entre com o seu usuário e abra **Plataforma → Planos**. Para cada plano, informe o nome, o preço por mês e **marque os módulos** que ele inclui. Por exemplo:
+
+| Plano | Módulos | Exemplo de preço |
+|---|---|---|
+| Painel | Painel de Propagandas | R$ 49,90 |
+| Comanda | Comanda | R$ 79,90 |
+| Completo | os dois | R$ 119,90 |
+
+Os preços podem mudar quando quiser. Quem já assinou continua com o valor antigo até trocar de plano.
+
+### Abra o cadastro para o público
+
+Com o Asaas configurado (seção 6), edite a configuração:
+
+```bash
+sudo nano /etc/painel-propagandas/ambiente
+```
+
+e mude estas linhas:
+
+```
+NOME_PLATAFORMA='Comercial Gustavo'
+CADASTRO_ABERTO=1
+TESTE_GRATIS_DIAS=7
+```
+
+Salve e reinicie: `sudo systemctl restart painel-propagandas`.
+
+A partir daí:
+
+1. Quem abre o seu domínio vê a apresentação dos módulos e os **planos**.
+2. A pessoa clica em **Começar**, cria a conta da loja (nome, código da loja, e-mail, usuário e senha) e escolhe o plano.
+3. Ela informa o CPF ou CNPJ, e o Asaas cria a assinatura. **Os módulos liberam na hora.** A primeira fatura vence depois dos dias grátis e chega no e-mail dela.
+4. Em **Minha loja**, ela troca de plano ou cancela quando quiser. Os módulos que não assinou aparecem com o botão **Assinar**.
+5. Se não pagar, a loja é bloqueada automaticamente depois da tolerância (`COBRANCA_TOLERANCIA_DIAS`) e volta sozinha quando pagar.
+
+Você recebe um aviso (e-mail ou webhook de alertas, seção 6) a cada loja nova, assinatura, troca e cancelamento.
+
+### A equipe de cada loja
+
+O administrador da loja cadastra a equipe em **Usuários**, escolhendo o papel de cada um:
+
+| Papel | Módulo | Pode |
+|---|---|---|
+| Administrador | todos os assinados | tudo da loja, inclusive equipe e assinatura |
+| Editor | Painel | propagandas |
+| Garçom | Comanda | abre comandas e lança pedidos |
+| Cozinha | Comanda | só a tela da cozinha |
+| Caixa | Comanda | fecha contas, cancela e vê as vendas |
+
+Cada loja tem um **endereço de entrada** próprio, mostrado em **Minha loja** (ex.: `https://comercialgustavo.com.br/entrar/padeiro-lanches`). Nele, o código da loja já vem preenchido: é o ideal para criar o ícone na tela inicial do celular da equipe.
+
+### Lojas que você mesmo cadastra
+
+Em **Plataforma → Nova empresa** você continua criando lojas à mão, como antes. Nesse caso, marque os módulos em **"Liberar sem plano"**: é para quem você cobra por fora do site, ou para dar acesso de cortesia. Dá para mudar depois em **Editar** de cada empresa.
+
+> **Comanda na internet:** os garçons e a cozinha precisam de internet na loja. Se ela cair, a Comanda para até voltar. Para restaurantes movimentados, recomende uma segunda internet (por exemplo, um chip 4G no roteador).
 
 ## 7. Backup fora do servidor
 

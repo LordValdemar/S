@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titulo %}Criar conta{% endblock %}
+{% block classe_main %}estreito{% endblock %}
+{% block conteudo %}
+<section>
+  <h2>Criar a conta da sua loja</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="plano" value="{{ plano_id }}">
+    <div class="campo"><label for="loja">Nome da loja</label><input type="text" id="loja" name="loja" value="{{ dados.loja }}" maxlength="100" required autofocus></div>
+    <div class="campo"><label for="codigo">Código da loja <span class="dica">(opcional)</span></label>
+      <input type="text" id="codigo" name="codigo" value="{{ dados.codigo }}" maxlength="40" pattern="[a-z0-9][a-z0-9-]{1,38}[a-z0-9]" placeholder="ex.: padeiro-lanches" autocapitalize="none">
+      <p class="dica">É o que sua equipe usa para entrar. Se deixar em branco, criamos a partir do nome.</p></div>
+    <div class="campo"><label for="email">Seu e-mail</label><input type="email" id="email" name="email" value="{{ dados.email }}" maxlength="200" required autocomplete="email"></div>
+    <div class="campo"><label for="usuario">Seu usuário (administrador da loja)</label><input type="text" id="usuario" name="usuario" value="{{ dados.usuario }}" maxlength="50" required autocapitalize="none" autocomplete="username"></div>
+    <div class="campo"><label for="senha">Senha (mín. 8)</label><input type="password" id="senha" name="senha" minlength="8" required autocomplete="new-password"></div>
+    <div class="campo"><label for="confirmacao">Repita a senha</label><input type="password" id="confirmacao" name="confirmacao" minlength="8" required autocomplete="new-password"></div>
+    <label class="marcar"><input type="checkbox" name="termos" required> Li e aceito os <a href="{{ url_for('legal.termos') }}" target="_blank">Termos de Uso</a> e a <a href="{{ url_for('legal.privacidade') }}" target="_blank">Política de Privacidade</a>.</label>
+    <button type="submit">Criar conta</button>
+  </form>
+  <p class="dica">Já tem conta? <a href="{{ url_for('auth.login') }}">Entrar</a>.</p>
+</section>
+{% endblock %}

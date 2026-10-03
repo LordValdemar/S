@@ -16,7 +16,7 @@ from datetime import date, timedelta
 
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import agenda, alertas, asaas, db
+from . import agenda, alertas, asaas, db, modulos
 from .auth import EMPRESA_PRINCIPAL, csrf_isento, login_obrigatorio, plataforma_obrigatoria
 
 bp = Blueprint("cobranca", __name__)
@@ -291,23 +291,25 @@ def _plano_do_formulario():
     for campo in ("limite_telas", "limite_mb"):
         valor = request.form.get(campo, "").strip()
         limites.append(int(valor) if valor.isdigit() else None)
-    return nome, preco, *limites
+    return nome, preco, *limites, modulos.do_formulario(request.form), request.form.get("descricao", "").strip()[:200]
 
 
 @bp.route("/plataforma/planos/novo", methods=["POST"])
 @plataforma_obrigatoria
 def novo_plano():
-    nome, preco, limite_telas, limite_mb = _plano_do_formulario()
+    nome, preco, limite_telas, limite_mb, modulos_plano, descricao = _plano_do_formulario()
     conexao = db.obter()
-    if not nome or preco is None:
+    if not modulos_plano:
+        flash("Marque pelo menos um módulo no plano.", "erro")
+    elif not nome or preco is None:
         flash("Informe o nome e o preço do plano (ex.: 49,90).", "erro")
     elif conexao.execute("SELECT 1 FROM planos WHERE nome = ?", (nome,)).fetchone():
         flash(f"O plano “{nome}” já existe.", "erro")
     else:
         with conexao:
             conexao.execute(
-                "INSERT INTO planos (nome, preco_centavos, limite_telas, limite_mb) VALUES (?, ?, ?, ?)",
-                (nome, preco, limite_telas, limite_mb),
+                "INSERT INTO planos (nome, preco_centavos, limite_telas, limite_mb, modulos, descricao) VALUES (?, ?, ?, ?, ?, ?)",
+                (nome, preco, limite_telas, limite_mb, modulos_plano, descricao),
             )
         log.info("“%s” criou o plano “%s” (%s)", g.usuario["usuario"], nome, reais(preco))
         flash(f"Plano “{nome}” criado.", "ok")
@@ -320,14 +322,16 @@ def atualizar_plano(plano_id):
     conexao = db.obter()
     if conexao.execute("SELECT 1 FROM planos WHERE id = ?", (plano_id,)).fetchone() is None:
         abort(404)
-    nome, preco, limite_telas, limite_mb = _plano_do_formulario()
-    if not nome or preco is None:
-        flash("Informe o nome e o preço do plano.", "erro")
+    nome, preco, limite_telas, limite_mb, modulos_plano, descricao = _plano_do_formulario()
+    if not nome or preco is None or not modulos_plano:
+        flash("Informe o nome, o preço e pelo menos um módulo do plano.", "erro")
         return redirect(url_for("plataforma.lista"))
     with conexao:
         conexao.execute(
-            "UPDATE planos SET nome = ?, preco_centavos = ?, limite_telas = ?, limite_mb = ?, ativo = ? WHERE id = ?",
-            (nome, preco, limite_telas, limite_mb, 1 if request.form.get("ativo") == "on" else 0, plano_id),
+            "UPDATE planos SET nome = ?, preco_centavos = ?, limite_telas = ?, limite_mb = ?, ativo = ?, modulos = ?, "
+            "descricao = ? WHERE id = ?",
+            (nome, preco, limite_telas, limite_mb, 1 if request.form.get("ativo") == "on" else 0, modulos_plano,
+             descricao, plano_id),
         )
         # Os limites valem na hora para todas as empresas do plano.
         conexao.execute(

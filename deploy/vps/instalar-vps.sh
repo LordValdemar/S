@@ -118,6 +118,12 @@ NOME_PLATAFORMA='Painel de Propagandas'
 CONTATO_PLATAFORMA=$EMAIL
 FUSO_HORARIO=America/Sao_Paulo
 
+# --- Plataforma de assinatura (Painel + Comanda) ---
+# 1 = a página inicial mostra os planos e qualquer pessoa cria a conta da loja e assina pelo site.
+CADASTRO_ABERTO=0
+# Dias grátis até a primeira fatura de quem assina pelo site (0 = cobra já no primeiro dia).
+TESTE_GRATIS_DIAS=7
+
 # --- Cobrança automática (Asaas) ---
 # Cadastre no Asaas o webhook https://$DOMINIO/webhooks/asaas com o token abaixo.
 ASAAS_API_KEY=

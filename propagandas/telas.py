@@ -5,10 +5,11 @@ import secrets
 
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import alertas, db, planos
+from . import alertas, db, modulos, planos
 from .auth import login_obrigatorio
 
 bp = Blueprint("telas", __name__)
+bp.before_request(modulos.exigir("painel"))  # só para lojas com o Painel no plano
 log = logging.getLogger("propagandas.telas")
 
 

@@ -28,11 +28,15 @@ def pedir_senha():
     return senha
 
 
-def buscar_usuario(conexao, nome):
-    linha = conexao.execute("SELECT id FROM usuarios WHERE usuario = ?", (nome,)).fetchone()
-    if linha is None:
+def buscar_usuario(conexao, nome, loja=None):
+    """O mesmo nome pode existir em várias lojas: nesse caso, informe --loja CÓDIGO."""
+    consulta = "SELECT u.id FROM usuarios u JOIN empresas e ON e.id = u.empresa_id WHERE u.usuario = ?"
+    linhas = conexao.execute(consulta + (" AND e.slug = ?" if loja else ""), (nome, loja) if loja else (nome,)).fetchall()
+    if not linhas:
         sys.exit(f"Usuário “{nome}” não encontrado.")
-    return linha["id"]
+    if len(linhas) > 1:
+        sys.exit(f"Há usuários “{nome}” em mais de uma loja. Informe o código: --loja CÓDIGO (veja listar-usuarios).")
+    return linhas[0]["id"]
 
 
 def main(argumentos=None):
@@ -54,8 +58,10 @@ def main(argumentos=None):
 
     trocar = comandos.add_parser("trocar-senha", help="redefine a senha (útil se esqueceu)")
     trocar.add_argument("usuario")
+    trocar.add_argument("--loja", help="código da loja (se o nome existir em mais de uma)")
     dois_fatores = comandos.add_parser("desativar-2fa", help="desativa a verificação em duas etapas de um usuário")
     dois_fatores.add_argument("usuario")
+    dois_fatores.add_argument("--loja", help="código da loja (se o nome existir em mais de uma)")
 
     comandos.add_parser("backup", help="faz um backup agora")
     restaurar = comandos.add_parser("restaurar", help="restaura um backup (pare o servidor antes)")
@@ -81,30 +87,30 @@ def main(argumentos=None):
             elif args.comando == "criar-empresa":
                 with conexao:
                     novo = conexao.execute(
-                        "INSERT INTO empresas (nome, limite_telas, limite_mb) VALUES (?, ?, ?)",
-                        (args.nome, args.limite_telas, args.limite_mb),
+                        "INSERT INTO empresas (nome, slug, limite_telas, limite_mb, modulos_liberados) VALUES (?, ?, ?, ?, 'painel')",
+                        (args.nome, db.gerar_slug(conexao, args.nome), args.limite_telas, args.limite_mb),
                     ).lastrowid
                 print(f"Empresa “{args.nome}” criada com id {novo}.")
                 print(f"Crie o administrador: python gerenciar.py criar-usuario NOME --empresa {novo}")
 
             elif args.comando == "listar-usuarios":
                 for linha in conexao.execute(
-                    "SELECT u.*, e.nome AS empresa FROM usuarios u JOIN empresas e ON e.id = u.empresa_id "
+                    "SELECT u.*, e.nome AS empresa, e.slug FROM usuarios u JOIN empresas e ON e.id = u.empresa_id "
                     "ORDER BY e.id, u.usuario"
                 ):
                     extras = (" +plataforma" if linha["plataforma"] else "") + (" +2FA" if linha["totp_segredo"] else "")
-                    print(f"{linha['usuario']:<25} {PAPEIS[linha['papel']]:<14} {linha['empresa']:<25}{extras}")
+                    print(f"{linha['usuario']:<25} {PAPEIS[linha['papel']]:<14} {linha['empresa']:<25} loja {linha['slug']}{extras}")
 
             elif args.comando == "criar-usuario":
                 criar_usuario(conexao, args.empresa, args.usuario, pedir_senha(), args.papel, args.plataforma)
                 print(f"Usuário “{args.usuario}” criado ({PAPEIS[args.papel]}).")
 
             elif args.comando == "trocar-senha":
-                trocar_senha(conexao, buscar_usuario(conexao, args.usuario), pedir_senha())
+                trocar_senha(conexao, buscar_usuario(conexao, args.usuario, args.loja), pedir_senha())
                 print("Senha alterada.")
 
             elif args.comando == "desativar-2fa":
-                desativar_2fa(conexao, buscar_usuario(conexao, args.usuario))
+                desativar_2fa(conexao, buscar_usuario(conexao, args.usuario, args.loja))
                 print("Verificação em duas etapas desativada. O usuário entra só com a senha e pode ativar de novo.")
 
             elif args.comando == "backup":

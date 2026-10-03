@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block titulo %}{{ nome }}{% endblock %}
+{% block classe_main %}medio{% endblock %}
+{% block conteudo %}
+<section class="bloqueado">
+  <h2>🔒 {{ nome }}</h2>
+  <p>{{ descricao }}</p>
+  <p>Sua loja ainda não assinou este módulo.</p>
+  {% if g.usuario.papel == 'admin' %}
+    <p><a class="botao" href="{{ url_for('conta.inicio') }}#planos">Ver planos e assinar</a></p>
+  {% else %}
+    <p class="dica">Peça ao administrador da sua loja para assinar.</p>
+  {% endif %}
+</section>
+{% endblock %}
