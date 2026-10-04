@@ -10,6 +10,10 @@ import zipfile
 
 from flask import Blueprint, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
+from src.domain.empresas import CadastroInvalido, ler_emails
+from src.domain.empresas.cadastro import NOME_MAX
+from src.domain.empresas.servico import WEBHOOK_MAX
+
 from . import agenda, alertas, db, planos
 from .auth import login_obrigatorio
 
@@ -22,13 +26,18 @@ log = logging.getLogger("propagandas.empresa")
 def configuracoes():
     conexao = db.obter()
     if request.method == "POST":
-        nome = request.form.get("nome", "").strip()[:100]
-        emails = [e.strip() for e in request.form.get("alerta_emails", "").split(",") if e.strip()]
-        webhook = request.form.get("alerta_webhook", "").strip()[:500]
+        nome = request.form.get("nome", "").strip()[:NOME_MAX]
+        webhook = request.form.get("alerta_webhook", "").strip()[:WEBHOOK_MAX]
+        try:
+            emails = ler_emails(request.form.get("alerta_emails"))
+        except CadastroInvalido as erro:
+            emails, erro_emails = [], str(erro)
+        else:
+            erro_emails = None
         if not nome:
             flash("Informe o nome da empresa.", "erro")
-        elif any("@" not in e or " " in e for e in emails):
-            flash("Confira os e-mails de alerta (separe por vírgula).", "erro")
+        elif erro_emails:
+            flash(erro_emails, "erro")
         elif webhook and (erro_webhook := _erro_webhook(webhook)):
             flash(f"Webhook recusado: {erro_webhook}.", "erro")
         else:

@@ -548,3 +548,12 @@ def test_tv_avisa_quando_a_janela_fecha(logado):
             conexao.execute("UPDATE telas SET fechada_em = '2026-01-01 00:00:00', ultimo_contato = '2026-01-01 00:00:00'")
     logado.get(f"/api/tela/{tela['codigo']}/playlist")
     assert "Online" in logado.get("/telas").get_data(as_text=True)
+
+
+def test_configuracoes_da_empresa(logado):
+    resposta = postar(logado, "/empresa", {"nome": "Minha", "alerta_emails": "sem arroba"}, pagina="/empresa")
+    assert "Confira os e-mails de alerta" in resposta.get_data(as_text=True)
+    postar(logado, "/empresa", {"nome": "Loja Nova", "alerta_emails": " a@b.com ,c@d.com"}, pagina="/empresa")
+    assert dict(consultar(logado, "SELECT nome, alerta_emails FROM empresas WHERE id = 1")[0]) == {
+        "nome": "Loja Nova", "alerta_emails": "a@b.com, c@d.com"}
+    assert logado.get("/empresa").status_code == 200

@@ -1,25 +1,25 @@
-"""Limites do plano de cada empresa (número de telas e armazenamento)."""
+"""Limites do plano de cada empresa (número de telas e armazenamento). As regras ficam no núcleo (src/domain/empresas)."""
 
-MB = 1024 * 1024
+from src.domain.empresas import MB
+from src.infrastructure.sqlite import RepositorioDeLimitesSQLite
+
+__all__ = ["MB", "cabe_no_armazenamento", "empresa", "pode_cadastrar_tela", "uso"]
 
 
 def empresa(conexao, empresa_id):
+    """A ficha completa (para as telas)."""
     return conexao.execute("SELECT * FROM empresas WHERE id = ?", (empresa_id,)).fetchone()
 
 
 def uso(conexao, empresa_id):
-    telas = conexao.execute("SELECT COUNT(*) FROM telas WHERE empresa_id = ?", (empresa_id,)).fetchone()[0]
-    bytes_usados = conexao.execute(
-        "SELECT COALESCE(SUM(tamanho), 0) FROM propagandas WHERE empresa_id = ?", (empresa_id,)
-    ).fetchone()[0]
-    return {"telas": telas, "bytes": bytes_usados, "mb": bytes_usados / MB}
+    return RepositorioDeLimitesSQLite(conexao).uso(empresa_id)
 
 
 def pode_cadastrar_tela(conexao, empresa_id):
-    limite = empresa(conexao, empresa_id)["limite_telas"]
-    return limite is None or uso(conexao, empresa_id)["telas"] < limite
+    repo = RepositorioDeLimitesSQLite(conexao)
+    return repo.limites(empresa_id).cabe_mais_uma_tela(repo.uso(empresa_id))
 
 
 def cabe_no_armazenamento(conexao, empresa_id, bytes_novos):
-    limite = empresa(conexao, empresa_id)["limite_mb"]
-    return limite is None or uso(conexao, empresa_id)["bytes"] + bytes_novos <= limite * MB
+    repo = RepositorioDeLimitesSQLite(conexao)
+    return repo.limites(empresa_id).cabe_no_armazenamento(repo.uso(empresa_id), bytes_novos)
