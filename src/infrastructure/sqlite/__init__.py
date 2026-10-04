@@ -6,7 +6,7 @@ tests/test_nucleo.py). Este arquivo e empresas.py não são copiados: ajusta o q
 
 from src.domain.permissoes import Cadastro
 
-from .empresas import RepositorioDeLimitesSQLite
+from .empresas import RepositorioDaPlataformaSQLite, RepositorioDeLimitesSQLite
 from .exibicoes import RepositorioDeExibicoesSQLite
 from .permissoes import RepositorioDePermissoesSQLite as _PermissoesDaPlataforma
 from .propagandas import RepositorioDePropagandasSQLite
@@ -27,6 +27,6 @@ class RepositorioDePermissoesSQLite(_PermissoesDaPlataforma):
 
 
 __all__ = [
-    "RepositorioDeConexoesSQLite", "RepositorioDeExibicoesSQLite", "RepositorioDeLimitesSQLite", "RepositorioDePermissoesSQLite", "RepositorioDePropagandasSQLite",
+    "RepositorioDaPlataformaSQLite", "RepositorioDeConexoesSQLite", "RepositorioDeExibicoesSQLite", "RepositorioDeLimitesSQLite", "RepositorioDePermissoesSQLite", "RepositorioDePropagandasSQLite",
     "RepositorioDeTelasSQLite",
 ]

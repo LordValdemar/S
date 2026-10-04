@@ -427,3 +427,22 @@ def test_sincronizacao_le_todas_as_paginas(monkeypatch):
     ])
     monkeypatch.setattr(asaas, "chamar", lambda *args, **kwargs: next(respostas))
     assert len(asaas.faturas_da_assinatura("sub_x")) == 101
+
+
+def test_plataforma_recusa_exclusao_errada_e_nao_suspende_a_principal(logado):
+    postar(logado, "/plataforma/empresas/nova", {"nome": "Padaria", "usuario": "padaria", "senha": "senha-da-padaria"},
+           pagina="/plataforma/")
+    empresa_id = consultar(logado, "SELECT id FROM empresas WHERE nome = 'Padaria'")[0]["id"]
+    resposta = postar(logado, f"/plataforma/empresas/{empresa_id}/excluir", {"confirmacao": "padaria"}, pagina="/plataforma/",
+                      follow_redirects=True)
+    assert "digite o nome exato" in resposta.get_data(as_text=True) and empresa(logado, empresa_id)
+    resposta = postar(logado, "/plataforma/empresas/1/excluir", {"confirmacao": empresa(logado, 1)["nome"]},
+                      pagina="/plataforma/", follow_redirects=True)
+    assert "principal não pode ser excluída" in resposta.get_data(as_text=True)
+    postar(logado, "/plataforma/empresas/1/atualizar", {"nome": "Minha"}, pagina="/plataforma/")
+    assert empresa(logado, 1)["ativa"] == 1
+    assert postar(logado, "/plataforma/empresas/999/atualizar", {"nome": "x"}, pagina="/plataforma/").status_code == 404
+    resposta = postar(logado, "/plataforma/empresas/nova", {"nome": "Outra", "usuario": "padaria", "senha": "senha-da-outra"},
+                      pagina="/plataforma/", follow_redirects=True)
+    assert "Empresa não criada" in resposta.get_data(as_text=True)
+    assert not consultar(logado, "SELECT 1 FROM empresas WHERE nome = 'Outra'")       # desfeita

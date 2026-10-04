@@ -1,6 +1,6 @@
 {
   "origem": "LordValdemar/plataforma-comanda",
-  "commit": "0c463f3",
+  "commit": "f5617d3",
   "infraestrutura": [
     "sqlite/datas.py",
     "sqlite/exibicoes.py",
@@ -8,5 +8,5 @@
     "sqlite/propagandas.py",
     "sqlite/telas.py"
   ],
-  "impressao_digital": "bdff8045d325c02370dfa374d1bb021721d375a4de0c66f6d5dd58cb0a87b363"
+  "impressao_digital": "22917c9185de7512c48d09dc7a92da61a5770d2265380c5e12cf9a44fec3e9b8"
 }
