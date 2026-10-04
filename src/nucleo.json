@@ -1,11 +1,11 @@
 {
   "origem": "LordValdemar/plataforma-comanda",
-  "commit": "547492b",
+  "commit": "c42c0f0",
   "infraestrutura": [
     "sqlite/datas.py",
     "sqlite/permissoes.py",
     "sqlite/propagandas.py",
     "sqlite/telas.py"
   ],
-  "impressao_digital": "ac20a3908bf269525b67f2daeffe36d03dd12e6bcb7b4b861a412d5195af833d"
+  "impressao_digital": "4321d09cf52a7c34137c0d51585b86a09f7f431a7cb7e8fa6538b8b8ac9160c3"
 }
