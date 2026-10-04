@@ -13,6 +13,7 @@ from flask import Blueprint, current_app, flash, g, redirect, render_template, r
 from src.domain.empresas import CadastroInvalido, ler_emails
 from src.domain.empresas.cadastro import NOME_MAX
 from src.domain.empresas.servico import WEBHOOK_MAX
+from src.infrastructure.alertas import motivo_para_recusar
 
 from . import agenda, alertas, db, planos
 from .auth import login_obrigatorio
@@ -38,7 +39,7 @@ def configuracoes():
             flash("Informe o nome da empresa.", "erro")
         elif erro_emails:
             flash(erro_emails, "erro")
-        elif webhook and (erro_webhook := _erro_webhook(webhook)):
+        elif webhook and (erro_webhook := motivo_para_recusar(webhook)):
             flash(f"Webhook recusado: {erro_webhook}.", "erro")
         else:
             with conexao:
@@ -60,14 +61,6 @@ def configuracoes():
         plano=conexao.execute("SELECT * FROM planos WHERE id = ?", (empresa["plano_id"],)).fetchone(),
         tem_faturas=conexao.execute("SELECT 1 FROM faturas WHERE empresa_id = ?", (g.empresa_id,)).fetchone() is not None,
     )
-
-
-def _erro_webhook(url):
-    try:
-        alertas.validar_url_webhook(url)
-    except alertas.EnderecoBloqueado as erro:
-        return str(erro)
-    return None
 
 
 def _linhas(conexao, sql, *parametros):

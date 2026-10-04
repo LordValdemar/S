@@ -160,7 +160,7 @@ def avaliar_inadimplencia(conexao, empresa_id, hoje=None):
 def _avisar_plataforma(mensagem):
     principal = db.obter().execute("SELECT * FROM empresas WHERE id = ?", (EMPRESA_PRINCIPAL,)).fetchone()
     canais = alertas.canais_da_empresa(principal, current_app.config)
-    if canais["nomes"]:
+    if canais.nomes:
         alertas.enviar_alerta(mensagem, canais)
 
 
