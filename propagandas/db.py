@@ -270,6 +270,10 @@ MIGRACOES = [
         tela_id       INTEGER REFERENCES telas(id) ON DELETE CASCADE
     );
     """,
+    # 7 - a TV avisa quando a janela é fechada: fica offline na hora, sem esperar os 3 minutos.
+    """
+    ALTER TABLE telas ADD COLUMN fechada_em TEXT;
+    """,
 ]
 
 
