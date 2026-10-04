@@ -5,8 +5,8 @@ from zoneinfo import ZoneInfo
 
 from flask import current_app
 
-DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]  # índice = datetime.weekday()
-TODOS_OS_DIAS = "0123456"
+from src.domain.horario import DIAS, TODOS_OS_DIAS, resumo_dias, resumo_horario  # noqa: F401 (usados pelas telas)
+
 FORMATO_UTC = "%Y-%m-%d %H:%M:%S"  # como as datas/horas ficam gravadas no banco (sempre UTC)
 
 
@@ -54,9 +54,11 @@ def tempo_desde(texto_utc):
 
 
 def local_formatado(texto_utc):
+    """Texto UTC do banco (ou datetime com fuso) → "dd/mm/aaaa hh:mm" no fuso da loja."""
     if not texto_utc:
         return "-"
-    return de_texto_utc(texto_utc).astimezone(fuso()).strftime("%d/%m/%Y %H:%M")
+    momento = texto_utc if isinstance(texto_utc, datetime) else de_texto_utc(texto_utc)
+    return momento.astimezone(fuso()).strftime("%d/%m/%Y %H:%M")
 
 
 def duracao_formatada(segundos):
@@ -68,60 +70,6 @@ def duracao_formatada(segundos):
     if minutos:
         return f"{minutos} min {seg:02d} s"
     return f"{seg} s"
-
-
-# ---------------------------------------------------------------------------
-# Agendamento
-# ---------------------------------------------------------------------------
-
-def _no_horario(hora, inicio, fim):
-    inicio = inicio or "00:00"
-    fim = fim or "24:00"
-    if inicio <= fim:
-        return inicio <= hora < fim
-    # Faixa que vira a noite, ex.: 22:00 até 02:00.
-    return hora >= inicio or hora < fim
-
-
-def situacao(item, agora):
-    """Retorna (código, texto) dizendo se a propaganda está no ar agora e por quê.
-
-    Os dias da semana valem para o dia do relógio: numa faixa 22:00-02:00
-    marcada só na sexta, a parte depois da meia-noite cai no sábado.
-    """
-    hoje = agora.date().isoformat()
-    if not item["ativo"]:
-        return "inativa", "Inativa"
-    if item["inicio"] and hoje < item["inicio"]:
-        return "agendada", "Começa em " + datetime.fromisoformat(item["inicio"]).strftime("%d/%m/%Y")
-    if item["fim"] and hoje > item["fim"]:
-        return "encerrada", "Encerrada"
-    if str(agora.weekday()) not in (item["dias_semana"] or TODOS_OS_DIAS):
-        return "fora_do_dia", "Fora do dia"
-    if not _no_horario(agora.strftime("%H:%M"), item["hora_inicio"], item["hora_fim"]):
-        return "fora_do_horario", "Fora do horário"
-    return "no_ar", "No ar agora"
-
-
-def esta_no_ar(item, agora):
-    return situacao(item, agora)[0] == "no_ar"
-
-
-def resumo_dias(dias):
-    dias = dias or TODOS_OS_DIAS
-    if dias == TODOS_OS_DIAS:
-        return "Todos os dias"
-    if dias == "01234":
-        return "Seg a Sex"
-    if dias == "56":
-        return "Sáb e Dom"
-    return ", ".join(DIAS[int(d)] for d in dias)
-
-
-def resumo_horario(inicio, fim):
-    if not inicio and not fim:
-        return "o dia todo"
-    return f"{inicio or '00:00'} às {fim or '24:00'}"
 
 
 def offset_minutos(dia):

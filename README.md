@@ -287,14 +287,34 @@ HOST=127.0.0.1 ATRAS_DE_PROXY=1 COOKIE_SEGURO=1 python servidor.py
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 ruff check .                                      # estilo e erros comuns
+mypy                                              # tipos (núcleo em src/)
 python -m pytest                                  # testes automáticos
 flask --app propagandas run --debug               # servidor com recarga automática
 ```
+
+### Núcleo compartilhado com a plataforma
+
+As regras do painel (agenda das propagandas, destinos, o que cada TV mostra, conexão da TV
+pelo QR, permissões e autorizações) ficam em `src/` e são **as mesmas da plataforma online**
+([plataforma-comanda](https://github.com/LordValdemar/plataforma-comanda)). Como as tabelas do
+painel são iguais às da plataforma, os repositórios do banco também vêm de lá
+(`src/infrastructure/sqlite/propagandas.py`, `telas.py`, `permissoes.py` e `datas.py`).
+
+Não edite esses arquivos aqui. Para mudar uma regra, mude na plataforma e copie de novo:
+
+```bash
+cd ../plataforma-comanda && python ferramentas/copiar_nucleo.py ../S
+```
+
+O teste `tests/test_nucleo.py` falha se a cópia for alterada à mão. O que é só deste banco fica
+em `src/infrastructure/sqlite/__init__.py` (por exemplo, aqui não existe a permissão individual
+de fechar contas, que é da Comanda).
 
 ### Estrutura
 
 ```
 servidor.py              # inicia em produção (Waitress + tarefas em segundo plano)
+src/                     # núcleo copiado da plataforma (regras e repositórios do painel)
 gerenciar.py             # comandos de administração
 propagandas/
 ├── __init__.py          # create_app: configuração, logs, segurança

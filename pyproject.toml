@@ -13,7 +13,14 @@ target-version = "py310"
 select = ["E4", "E7", "E9", "F", "W", "I", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["propagandas", "conftest"]
+known-first-party = ["propagandas", "conftest", "src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+# Tipagem conferida no núcleo (src/domain e os repositórios copiados da plataforma) e no que é só daqui.
+python_version = "3.10"
+files = ["src"]
+strict = true
+warn_unreachable = true

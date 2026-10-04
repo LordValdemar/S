@@ -10,6 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY propagandas ./propagandas
+COPY src ./src
 COPY servidor.py gerenciar.py ./
 
 # Roda sem privilégios de administrador.

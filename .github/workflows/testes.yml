@@ -20,6 +20,8 @@ jobs:
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - name: Verificação de estilo e erros (ruff)
         run: ruff check .
+      - name: Tipos (mypy) no núcleo
+        run: mypy
       - name: Testes automáticos
         run: python -m pytest -q
 
