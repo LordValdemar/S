@@ -24,12 +24,17 @@
     {% elif g.usuario %}
       <nav>
         <a href="{{ url_for('painel.lista') }}" {% if request.endpoint == 'painel.lista' %}class="atual"{% endif %}>Propagandas</a>
-        {% if g.usuario.papel == 'admin' %}
+        {% if permite('telas') %}
           <a href="{{ url_for('telas.lista') }}" {% if request.endpoint == 'telas.lista' %}class="atual"{% endif %}>Telas</a>
         {% endif %}
-        <a href="{{ url_for('relatorios.resumo') }}" {% if request.endpoint == 'relatorios.resumo' %}class="atual"{% endif %}>Relatórios</a>
+        {% if permite('relatorios') %}
+          <a href="{{ url_for('relatorios.resumo') }}" {% if request.endpoint == 'relatorios.resumo' %}class="atual"{% endif %}>Relatórios</a>
+        {% endif %}
+        {% if mostrar_autorizar() %}
+          <a href="{{ url_for('permissoes.autorizar') }}" {% if request.endpoint == 'permissoes.autorizar' %}class="atual"{% endif %}>Autorizar</a>
+        {% endif %}
         {% if g.usuario.papel == 'admin' %}
-          <a href="{{ url_for('auth.usuarios') }}" {% if request.endpoint == 'auth.usuarios' %}class="atual"{% endif %}>Usuários</a>
+          <a href="{{ url_for('auth.usuarios') }}" {% if request.endpoint in ('auth.usuarios', 'permissoes.configurar') %}class="atual"{% endif %}>Usuários</a>
         {% endif %}
         {% if g.usuario.papel == 'admin' %}
           <a href="{{ url_for('empresa.configuracoes') }}" {% if request.endpoint == 'empresa.configuracoes' %}class="atual"{% endif %}>Empresa</a>

@@ -274,6 +274,21 @@ MIGRACOES = [
     """
     ALTER TABLE telas ADD COLUMN fechada_em TEXT;
     """,
+    # 8 - autorizações por QR code: quem tem a permissão libera, por alguns minutos, quem precisa
+    # de autorização (ex.: o administrador libera o editor a cadastrar uma TV). Fica o registro.
+    """
+    CREATE TABLE autorizacoes (
+        id             INTEGER PRIMARY KEY,
+        empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        codigo         TEXT    NOT NULL UNIQUE,
+        funcao         TEXT    NOT NULL,
+        autorizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        usado_por      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        criado_em      TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        usado_em       TEXT
+    );
+    CREATE INDEX autorizacoes_empresa ON autorizacoes(empresa_id, usado_em);
+    """,
 ]
 
 
