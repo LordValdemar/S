@@ -323,3 +323,31 @@ def test_lote_e_pausa_nao_alcancam_outra_empresa(duas_empresas):
     postar(joao, "/pausa", {"acao": "pausar"})
     assert dono.get("/api/playlist").get_json()["pausado"] is False
     assert [i["id"] for i in dono.get("/api/playlist").get_json()["itens"]] == [pid]
+
+
+def test_administrador_muda_papel_e_senha_de_quem_e_da_equipe(duas_empresas):
+    dono, joao, _ = duas_empresas
+    postar(joao, "/usuarios/novo", {"usuario": "ana", "senha": "senha-da-ana-1", "papel": "editor"}, pagina="/usuarios")
+    ana_id = consultar(dono, "SELECT id FROM usuarios WHERE usuario = 'ana'")[0]["id"]
+    ana = entrar(joao.application, "ana", "senha-da-ana-1")
+    assert ana.get("/usuarios").status_code == 403
+
+    # Vira administradora: vale na hora, sem sair e entrar de novo.
+    postar(joao, f"/usuarios/{ana_id}/editar", {"papel": "admin"}, pagina="/usuarios")
+    assert ana.get("/usuarios").status_code == 200
+
+    # Senha nova (esqueceu a dela): as sessões abertas caem e a senha antiga para de valer.
+    postar(joao, f"/usuarios/{ana_id}/editar", {"papel": "admin", "senha": "senha-nova-da-ana"}, pagina="/usuarios")
+    assert "/login" in ana.get("/").headers["Location"]
+    assert entrar(joao.application, "ana", "senha-nova-da-ana").get("/usuarios").status_code == 200
+
+    # Senha curta ou papel inexistente: nada muda.
+    postar(joao, f"/usuarios/{ana_id}/editar", {"papel": "editor", "senha": "curta"}, pagina="/usuarios")
+    postar(joao, f"/usuarios/{ana_id}/editar", {"papel": "dono"}, pagina="/usuarios")
+    assert consultar(dono, "SELECT papel FROM usuarios WHERE id = ?", ana_id)[0][0] == "admin"
+
+    # O próprio papel não muda (a loja nunca fica sem administrador), nem o de outra loja.
+    joao_id = consultar(dono, "SELECT id FROM usuarios WHERE usuario = 'joao'")[0]["id"]
+    assert postar(joao, f"/usuarios/{joao_id}/editar", {"papel": "editor"}, pagina="/usuarios").status_code == 403
+    admin_id = consultar(dono, "SELECT id FROM usuarios WHERE usuario = 'admin'")[0]["id"]
+    assert postar(joao, f"/usuarios/{admin_id}/editar", {"papel": "editor"}, pagina="/usuarios").status_code == 404

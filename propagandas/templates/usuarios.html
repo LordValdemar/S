@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block titulo %}Usuários{% endblock %}
+{% macro opcoes_de_papel(atual=None) %}
+  <option value="editor" {{ 'selected' if atual == 'editor' }}>Editor: cuida das propagandas</option>
+  <option value="admin" {{ 'selected' if atual == 'admin' }}>Administrador: também gerencia usuários</option>
+{% endmacro %}
 {% block conteudo %}
 <section>
   <h2>Novo usuário</h2>
@@ -9,10 +13,7 @@
     <div><label for="senha">Senha (mín. 8)</label><input type="password" id="senha" name="senha" required minlength="8" autocomplete="new-password"></div>
     <div>
       <label for="papel">Papel</label>
-      <select id="papel" name="papel">
-        <option value="editor">Editor: cuida das propagandas</option>
-        <option value="admin">Administrador: também gerencia usuários</option>
-      </select>
+      <select id="papel" name="papel">{{ opcoes_de_papel() }}</select>
     </div>
     <div class="fixo"><button type="submit">Criar</button></div>
   </form>
@@ -41,6 +42,19 @@
           </td>
           <td>{{ u.criado_em[:10] }}</td>
           <td class="acoes-celula">
+            {% if u.id != g.usuario.id and not u.plataforma %}
+              <details class="editar-usuario">
+                <summary>Editar</summary>
+                <form action="{{ url_for('auth.editar_usuario', usuario_id=u.id) }}" method="post">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <label for="papel-{{ u.id }}">Papel</label>
+                  <select id="papel-{{ u.id }}" name="papel">{{ opcoes_de_papel(u.papel) }}</select>
+                  <label for="senha-{{ u.id }}">Senha nova <span class="dica">(deixe em branco para manter)</span></label>
+                  <input type="password" id="senha-{{ u.id }}" name="senha" minlength="8" autocomplete="new-password">
+                  <button type="submit">Salvar</button>
+                </form>
+              </details>
+            {% endif %}
             {% if u.id != g.usuario.id %}
               <form action="{{ url_for('auth.excluir_usuario', usuario_id=u.id) }}" method="post" data-confirmar="Excluir o usuário {{ u.usuario }}?">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

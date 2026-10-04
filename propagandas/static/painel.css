@@ -48,6 +48,9 @@ input[type=file] { max-width: 100%; }
 }
 details { margin-top: 10px; border: 1px solid #e6e9f0; border-radius: 8px; padding: 8px 12px; }
 details summary { cursor: pointer; color: #2f6fed; font-size: .9rem; }
+.editar-usuario { margin: 0 0 6px; padding: 4px 10px; }
+.editar-usuario[open] { min-width: 240px; }
+.editar-usuario form { display: grid; gap: 6px; margin-top: 8px; }
 .opcoes { display: flex; gap: 4px 14px; flex-wrap: wrap; margin: 6px 0 10px; }
 .opcoes label { display: inline-flex; gap: 5px; align-items: center; color: #1d2433; font-size: .9rem; margin: 0; }
 .resumo { font-size: .85rem; color: #555; margin-top: 4px; }

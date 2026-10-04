@@ -493,6 +493,37 @@ def novo_usuario():
     return redirect(url_for("auth.usuarios"))
 
 
+@bp.route("/usuarios/<int:usuario_id>/editar", methods=["POST"])
+@login_obrigatorio("admin")
+def editar_usuario(usuario_id):
+    """Troca o papel de alguém da equipe e, se preenchida, define uma senha nova (para quem esqueceu)."""
+    conexao = db.obter()
+    alvo = _usuario_da_empresa(conexao, usuario_id)
+    if alvo["id"] == g.usuario["id"] or alvo["plataforma"]:
+        abort(403)  # o próprio papel não muda (evita ficar sem administrador); a senha própria é em "Minha conta"
+    papel = request.form.get("papel", alvo["papel"])
+    senha = request.form.get("senha", "")
+    try:
+        if papel not in PAPEIS:
+            raise ErroUsuario("Papel inválido.")
+        if senha:
+            trocar_senha(conexao, usuario_id, senha)  # derruba as sessões abertas da pessoa
+    except ErroUsuario as erro:
+        flash(str(erro), "erro")
+        return redirect(url_for("auth.usuarios"))
+    if papel != alvo["papel"]:
+        with conexao:
+            conexao.execute("UPDATE usuarios SET papel = ? WHERE id = ?", (papel, usuario_id))
+        log.info("“%s” mudou o papel de “%s” de %s para %s", g.usuario["usuario"], alvo["usuario"], alvo["papel"], papel)
+    if senha:
+        log.info("“%s” definiu uma senha nova para “%s”", g.usuario["usuario"], alvo["usuario"])
+    mudancas = [f"agora é {PAPEIS[papel]}"] if papel != alvo["papel"] else []
+    if senha:
+        mudancas.append("tem senha nova (os aparelhos dela precisam entrar de novo)")
+    flash(f"“{alvo['usuario']}” {' e '.join(mudancas)}." if mudancas else "Nada mudou.", "ok")
+    return redirect(url_for("auth.usuarios"))
+
+
 @bp.route("/usuarios/<int:usuario_id>/excluir", methods=["POST"])
 @login_obrigatorio("admin")
 def excluir_usuario(usuario_id):

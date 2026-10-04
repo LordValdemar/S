@@ -24,7 +24,7 @@ FORA_DA_VARREDURA = {"static", "exibicao.midia", "auth.entrar_na_loja", "exibica
 SO_ADMINISTRACAO = re.compile(
     r"^(empresa|plataforma)\.|^cobranca\.(salvar|ativar|cancelar|sincronizar|atualizar|novo)|"
     r"^telas\.(lista|nova|atualizar|trocar_codigo|desconectar_aparelho|excluir|novo_grupo|excluir_grupo|testar_alerta)$|"
-    r"^auth\.(usuarios|novo_usuario|excluir_usuario|desativar_2fa_usuario)$|^conta\.(assinar|cancelar)$"
+    r"^auth\.(usuarios|novo_usuario|editar_usuario|excluir_usuario|desativar_2fa_usuario)$|^conta\.(assinar|cancelar)$"
 )
 
 
