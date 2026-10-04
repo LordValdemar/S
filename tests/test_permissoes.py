@@ -133,3 +133,12 @@ def test_uma_vez_e_sem_prazo(logado, app):
     assert "sem prazo" in logado.get("/autorizar").get_data(as_text=True)
     post(logado, f"/autorizar/{liberacao}/encerrar")
     assert ana.get("/telas").status_code == 403
+
+
+def test_editor_so_autoriza_se_o_administrador_deixar(logado, app):
+    criar_editor(app)
+    criar_editor(app, "bia")
+    permitir(logado, **{"telas.editor": permissoes.AUTORIZACAO})
+    ana = pessoa(app, "ana")
+    assert ana.get("/autorizar").status_code == 403
+    assert "Autorizar os outros" in logado.get("/permissoes").get_data(as_text=True)
