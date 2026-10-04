@@ -11,6 +11,9 @@ Serve para **usar nas suas lojas** e para **vender como serviço**: cada cliente
 - **Agendamento**: período de validade (ex.: 01/10 a 15/10), **dias da semana** e **faixa de horário** (ex.: café da manhã de seg a sex, das 06:00 às 10:00).
 - **Várias telas e grupos de telas**: cada propaganda vai para todas as telas, para telas específicas ou para grupos (ex.: “Lojas de SP”).
 - **Letreiro** com texto rolando no rodapé, geral ou próprio de cada tela.
+- **Letreiro por propaganda**: cada propaganda usa o letreiro geral, um texto próprio ou nenhum.
+- **Mudar várias propagandas de uma vez**: marque as propagandas e troque as telas e grupos, o tempo ou o letreiro, ou ative, desative e exclua todas juntas.
+- **Pausar todas as propagandas**: um botão deixa todas as TVs com a tela preta até alguém retomar.
 - Tela de exibição em tela cheia que recebe as mudanças sozinha, pré-carrega as mídias e continua passando as propagandas se a rede cair.
 
 **Monitoramento e relatórios**
