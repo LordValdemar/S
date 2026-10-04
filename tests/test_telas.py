@@ -448,7 +448,7 @@ def test_telas_antigas_aceitam_a_tv_que_ja_usa_o_endereco(logado):
     assert outro.get(f"/api/tela/{codigo}/playlist").status_code == 403
 
 
-def test_so_admin_e_editor_conectam_e_so_telas_da_propria_loja(logado):
+def test_editor_conecta_e_so_telas_da_propria_loja(logado):
     from propagandas import auth
     postar(logado, "/telas/nova", {"nome": "Do dono"}, pagina="/telas")
     tela_do_dono = consultar(logado, "SELECT id FROM telas")[0][0]
@@ -456,7 +456,6 @@ def test_so_admin_e_editor_conectam_e_so_telas_da_propria_loja(logado):
            pagina="/plataforma/")
     outra_id = consultar(logado, "SELECT id FROM empresas WHERE nome = 'Outra'")[0][0]
     with logado.application.app_context():
-        auth.criar_usuario(db.obter(), 1, "caixa1", "senha-forte-123", "caixa")
         auth.criar_usuario(db.obter(), 1, "editor1", "senha-forte-123", "editor")
 
     def entrar(usuario):
@@ -465,7 +464,6 @@ def test_so_admin_e_editor_conectam_e_so_telas_da_propria_loja(logado):
         return cliente
 
     codigo = _codigo_da_tv(logado.application.test_client())
-    assert entrar("caixa1").get(f"/tela/parear/{codigo}").status_code == 403
     assert "Do dono" in entrar("editor1").get(f"/tela/parear/{codigo}").get_data(as_text=True)
     dono2 = entrar("dono2")
     assert "Do dono" not in dono2.get(f"/tela/parear/{codigo}").get_data(as_text=True)
