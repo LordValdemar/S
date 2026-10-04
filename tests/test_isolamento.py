@@ -88,13 +88,19 @@ def lojas(logado):
     postar(vitima, "/grupos/novo", {"nome": f"Grupo {SEGREDO}"}, pagina="/telas")
     tela = consultar(app, "SELECT * FROM telas WHERE empresa_id = ?", vitima_id)[0]
     conectar_tv(vitima, tela["id"])
+    # Uma liberação "sem prazo" dada pelo administrador da vítima ao editor dela.
+    vitima.post("/permissoes", data={"telas.editor": "2", "csrf_token": token(vitima)})
+    pagina = vitima.get("/autorizar?funcao=telas&modo=sempre").get_data(as_text=True)
+    codigo_qr = re.search(r'class="selo codigo-autorizacao">([A-Z0-9]{8})<', pagina).group(1)
+    entrar(app, "editor-vitima").get(f"/autorizacao/{codigo_qr}")
+    liberacao = consultar(app, "SELECT id FROM autorizacoes WHERE empresa_id = ? AND usado_em IS NOT NULL", vitima_id)[0][0]
 
     ids = {
         "propaganda_id": consultar(app, "SELECT id FROM propagandas WHERE empresa_id = ?", vitima_id)[0]["id"],
         "tela_id": tela["id"],
         "grupo_id": consultar(app, "SELECT id FROM grupos WHERE empresa_id = ?", vitima_id)[0]["id"],
         "usuario_id": consultar(app, "SELECT id FROM usuarios WHERE usuario = 'vitima'")[0]["id"],
-        "empresa_id": vitima_id, "plano_id": 1,
+        "empresa_id": vitima_id, "plano_id": 1, "liberacao_id": liberacao,
         "direcao": "cima", "codigo": tela["codigo"],
     }
     formulario = {
@@ -146,6 +152,10 @@ def test_outra_loja_nao_alcanca_nada_em_nenhuma_rota(lojas):
 
 def test_editor_nao_usa_rotas_da_administracao(lojas):
     app, vitima_id, ids, formulario = lojas
+    with app.app_context():  # a liberação "sem prazo" do editor (da fixture) não vale aqui
+        conexao = db.obter()
+        with conexao:
+            conexao.execute("UPDATE autorizacoes SET revogada_em = '2020-01-01 00:00:00'")
     editor = entrar(app, "editor-vitima")
     antes = foto(app, vitima_id)  # depois de entrar: abrir /conta prepara o segredo da 2FA de quem entra
     for regra in rotas(app):

@@ -1,7 +1,6 @@
 """Permissões do editor (escolhidas pelo administrador) e autorização por QR code."""
 
 import re
-import time
 
 from conftest import postar
 from propagandas import auth, db, permissoes
@@ -37,8 +36,8 @@ def consultar(app, sql, *parametros):
         return db.obter().execute(sql, parametros).fetchall()
 
 
-def codigo_do_qr(cliente, funcao):
-    pagina = cliente.get(f"/autorizar?funcao={funcao}").get_data(as_text=True)
+def codigo_do_qr(cliente, funcao, modo="minutos", minutos=5):
+    pagina = cliente.get(f"/autorizar?funcao={funcao}&modo={modo}&minutos={minutos}").get_data(as_text=True)
     return re.search(r'class="selo codigo-autorizacao">([A-Z0-9]{8})<', pagina).group(1)
 
 
@@ -86,8 +85,10 @@ def test_editor_cadastra_tv_com_o_qr_do_administrador(logado, app):
 
     bia.get(f"/autorizacao/{codigo}")                       # o mesmo QR não serve de novo
     assert bia.get("/telas").status_code == 403
-    with ana.session_transaction() as sessao:
-        sessao["autorizacoes"]["telas"]["ate"] = time.time() - 1
+    with app.app_context():
+        conexao = db.obter()
+        with conexao:
+            conexao.execute("UPDATE autorizacoes SET ate = '2020-01-01 00:00:00' WHERE usado_por IS NOT NULL")
     assert ana.get("/telas").status_code == 403
 
     vencido = codigo_do_qr(logado, "telas")
@@ -110,3 +111,25 @@ def test_codigo_de_outra_loja_nao_vale(logado, app):
     codigo = codigo_do_qr(outro, "telas")
     ana = pessoa(app, "ana")
     assert "não vale" in ana.get(f"/autorizacao/{codigo}", follow_redirects=True).get_data(as_text=True)
+
+
+def test_uma_vez_e_sem_prazo(logado, app):
+    criar_editor(app)
+    permitir(logado, **{"telas.editor": permissoes.AUTORIZACAO})
+    ana = pessoa(app, "ana")
+    assert "Sem prazo" in logado.get("/autorizar?funcao=telas").get_data(as_text=True)
+
+    ana.get(f"/autorizacao/{codigo_do_qr(logado, 'telas', 'uma')}")
+    post(ana, "/telas/nova", {"nome": "Primeira"})
+    assert post(ana, "/telas/nova", {"nome": "Segunda"}).status_code == 403
+    assert [t["nome"] for t in consultar(app, "SELECT nome FROM telas")] == ["Primeira"]
+
+    ana.get(f"/autorizacao/{codigo_do_qr(logado, 'telas', 'sempre')}")
+    ana = pessoa(app, "ana")  # saiu e entrou de novo: continua valendo
+    post(ana, "/telas/nova", {"nome": "Segunda"})
+    post(ana, "/telas/nova", {"nome": "Terceira"})
+    assert len(consultar(app, "SELECT * FROM telas")) == 3
+    liberacao = consultar(app, "SELECT id FROM autorizacoes WHERE modo = 'sempre'")[0][0]
+    assert "sem prazo" in logado.get("/autorizar").get_data(as_text=True)
+    post(logado, f"/autorizar/{liberacao}/encerrar")
+    assert ana.get("/telas").status_code == 403
