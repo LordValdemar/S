@@ -159,7 +159,7 @@ def create_app(sobrescrever=None):
         # Libera só o que o sistema usa: tela cheia e vídeo nas TVs, tela acesa na cozinha.
         resposta.headers.setdefault(
             "Permissions-Policy",
-            "fullscreen=(self), autoplay=(self), screen-wake-lock=(self), camera=(), microphone=(), "
+            "fullscreen=(self), autoplay=(self), screen-wake-lock=(self), camera=(self), microphone=(), "
             "geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), browsing-topics=()",
         )
         resposta.headers.setdefault(
