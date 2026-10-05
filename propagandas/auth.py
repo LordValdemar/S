@@ -34,7 +34,7 @@ from src.domain.contas.entidades import JANELA_BLOQUEIO, MAX_TENTATIVAS
 from src.domain.erros import NaoEncontrado, SemPermissao
 from src.domain.tentativas import LimiteDeTentativas
 from src.infrastructure.senhas import SenhasWerkzeug
-from src.infrastructure.sqlite import ConsultasDeEmpresas, RepositorioDaPlataformaSQLite, RepositorioDeContasSQLite
+from src.infrastructure.sqlite import ConsultasDeEmpresas, RepositorioDaEmpresaSQLite, RepositorioDeContasSQLite
 
 from . import db, totp
 
@@ -235,7 +235,7 @@ def configurar():
                 flash(str(erro), "erro")
             else:
                 if empresa:
-                    RepositorioDaPlataformaSQLite(conexao).renomear(EMPRESA_PRINCIPAL, empresa)
+                    RepositorioDaEmpresaSQLite(conexao).renomear(EMPRESA_PRINCIPAL, empresa)
                 _entrar(_buscar_usuario(conexao, novo_id))
                 log.info("Administrador inicial “%s” criado (IP %s)", usuario.strip(), request.remote_addr)
                 flash("Tudo pronto! Agora cadastre suas telas e envie as propagandas.", "ok")

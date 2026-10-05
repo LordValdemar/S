@@ -1,14 +1,21 @@
 """Limites do plano de cada empresa (número de telas e armazenamento). As regras ficam no núcleo (src/domain/empresas)."""
 
 from src.domain.empresas import MB
-from src.infrastructure.sqlite import RepositorioDeLimitesSQLite
+from src.infrastructure.sqlite import ConsultasDeEmpresas, RepositorioDeLimitesSQLite
 
-__all__ = ["MB", "cabe_no_armazenamento", "empresa", "pode_cadastrar_tela", "uso"]
+from . import db
+
+__all__ = ["MB", "cabe_no_armazenamento", "consultas", "empresa", "pode_cadastrar_tela", "uso"]
+
+
+def consultas(conexao=None):
+    """O que as telas leem das empresas, planos e faturas."""
+    return ConsultasDeEmpresas(conexao or db.obter())
 
 
 def empresa(conexao, empresa_id):
     """A ficha completa (para as telas)."""
-    return conexao.execute("SELECT * FROM empresas WHERE id = ?", (empresa_id,)).fetchone()
+    return consultas(conexao).ficha(empresa_id)
 
 
 def uso(conexao, empresa_id):

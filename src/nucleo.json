@@ -6,6 +6,7 @@
     "asaas.py",
     "backup.py",
     "senhas.py",
+    "sqlite/cobranca.py",
     "sqlite/consultas_painel.py",
     "sqlite/datas.py",
     "sqlite/exibicoes.py",
@@ -14,5 +15,5 @@
     "sqlite/propagandas.py",
     "sqlite/telas.py"
   ],
-  "impressao_digital": "87e958ac8f2433873d45f1200761f08622d163285e9b13424d5a9707ca8bba89"
+  "impressao_digital": "292240fa109550a8b25a2951a711a3ff0e9913056b45f6086d11dfa695bd37c2"
 }

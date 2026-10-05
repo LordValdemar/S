@@ -299,6 +299,12 @@ MIGRACOES = [
     ALTER TABLE autorizacoes ADD COLUMN encerrada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
     CREATE INDEX autorizacoes_liberadas ON autorizacoes(usado_por, funcao);
     """,
+    # 10 - planos com módulos e descrição, como na plataforma (as regras de cobrança são as do núcleo).
+    # Aqui o único módulo é o Painel de Propagandas.
+    """
+    ALTER TABLE planos ADD COLUMN modulos TEXT NOT NULL DEFAULT 'painel';
+    ALTER TABLE planos ADD COLUMN descricao TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

@@ -12,7 +12,7 @@ from src.domain.empresas import CadastroInvalido, DadosDaEmpresa, Limites, Servi
 from src.domain.erros import NaoEncontrado
 from src.infrastructure.sqlite import RepositorioDaPlataformaSQLite
 
-from . import agenda, alertas, asaas, cobranca, db
+from . import agenda, alertas, asaas, cobranca, db, planos
 from .auth import EMPRESA_PRINCIPAL, ErroUsuario, criar_usuario, plataforma_obrigatoria
 from .planos import MB
 
@@ -39,45 +39,26 @@ def servico(conexao=None):
 @bp.route("/")
 @plataforma_obrigatoria
 def lista():
-    conexao = db.obter()
-    empresas = conexao.execute(
-        """
-        SELECT e.*,
-               (SELECT COUNT(*) FROM usuarios u WHERE u.empresa_id = e.id) AS usuarios,
-               (SELECT COUNT(*) FROM propagandas p WHERE p.empresa_id = e.id) AS propagandas,
-               (SELECT COALESCE(SUM(tamanho), 0) FROM propagandas p WHERE p.empresa_id = e.id) AS bytes
-        FROM empresas e ORDER BY e.id
-        """
-    ).fetchall()
-    telas = conexao.execute("SELECT empresa_id, ultimo_contato, fechada_em FROM telas").fetchall()
+    leitura = planos.consultas()
+    empresas = leitura.empresas_com_uso()
     resumo_telas = {}
-    for tela in telas:
+    for tela in leitura.contato_das_telas():
         contagem = resumo_telas.setdefault(tela["empresa_id"], {"total": 0, "online": 0})
         contagem["total"] += 1
         contagem["online"] += alertas.esta_online(tela)
-    faturas = {}
-    for fatura in conexao.execute(
-        "SELECT * FROM faturas WHERE status != 'DELETED' ORDER BY vencimento DESC"
-    ).fetchall():
-        lista_empresa = faturas.setdefault(fatura["empresa_id"], [])
-        if len(lista_empresa) < 6:
-            lista_empresa.append(fatura)
     return render_template(
         "plataforma.html",
         empresas=empresas,
         telas=resumo_telas,
         MB=MB,
         principal=EMPRESA_PRINCIPAL,
-        planos=conexao.execute("SELECT * FROM planos ORDER BY preco_centavos").fetchall(),
-        faturas=faturas,
+        planos=leitura.planos(),
+        faturas=leitura.faturas_recentes(por_empresa=6),
         STATUS=cobranca.STATUS,
         asaas_configurado=asaas.configurado(),
         ambiente=current_app.config["ASAAS_AMBIENTE"],
         hoje=agenda.agora_local().date(),
-        receita=conexao.execute(
-            "SELECT COALESCE(SUM(p.preco_centavos), 0) FROM empresas e JOIN planos p ON p.id = e.plano_id "
-            "WHERE e.asaas_assinatura_id IS NOT NULL AND e.ativa = 1"
-        ).fetchone()[0],
+        receita=leitura.receita_mensal(),
     )
 
 
@@ -114,12 +95,6 @@ def atualizar(empresa_id):
     return redirect(url_for("plataforma.lista"))
 
 
-def _cancelar_assinatura(empresa_id):
-    """Sem isso o Asaas continuaria cobrando um cliente que não existe mais."""
-    empresa = db.obter().execute("SELECT asaas_assinatura_id FROM empresas WHERE id = ?", (empresa_id,)).fetchone()
-    asaas.cancelar_assinatura(empresa["asaas_assinatura_id"])
-
-
 def _apagar_midia(arquivo):
     caminho = os.path.join(current_app.config["PASTA_MIDIA"], arquivo)
     if os.path.exists(caminho):
@@ -130,7 +105,8 @@ def _apagar_midia(arquivo):
 @plataforma_obrigatoria
 def excluir(empresa_id):
     try:
-        empresa = servico().excluir(empresa_id, request.form.get("confirmacao", ""), _cancelar_assinatura, _apagar_midia)
+        empresa = servico().excluir(empresa_id, request.form.get("confirmacao", ""),
+                                   cobranca.servico().cancelar_no_gateway, _apagar_midia)
     except NaoEncontrado:
         abort(404)
     except asaas.ErroAsaas as erro:

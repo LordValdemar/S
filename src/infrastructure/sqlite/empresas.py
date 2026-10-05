@@ -24,7 +24,21 @@ class RepositorioDeLimitesSQLite:
         return Uso(int(telas), int(bytes_usados))
 
 
-class RepositorioDaPlataformaSQLite(RepositorioDeLimitesSQLite):
+class RepositorioDaEmpresaSQLite(RepositorioDeLimitesSQLite):
+    """O que a página "Empresa" e o primeiro acesso gravam."""
+
+    def renomear(self, empresa_id: int, nome: str) -> None:
+        """O primeiro acesso dá nome à empresa principal."""
+        with self._c:
+            self._c.execute("UPDATE empresas SET nome = ? WHERE id = ?", (nome[:100], empresa_id))
+
+    def gravar_configuracoes(self, empresa_id: int, nome: str, emails: str, webhook: str) -> None:
+        with self._c:
+            self._c.execute("UPDATE empresas SET nome = ?, alerta_emails = ?, alerta_webhook = ? WHERE id = ?",
+                            (nome, emails, webhook, empresa_id))
+
+
+class RepositorioDaPlataformaSQLite(RepositorioDaEmpresaSQLite):
     """A plataforma administrando as empresas clientes. Aqui não há código da loja, módulos nem dados de cadastro."""
 
     def cliente(self, empresa_id: int) -> EmpresaCliente | None:
@@ -54,11 +68,6 @@ class RepositorioDaPlataformaSQLite(RepositorioDeLimitesSQLite):
     def arquivos_de_midia(self, empresa_id: int) -> list[str]:
         return [linha["arquivo"] for linha in self._c.execute("SELECT arquivo FROM propagandas WHERE empresa_id = ?",
                                                                 (empresa_id,))]
-
-    def renomear(self, empresa_id: int, nome: str) -> None:
-        """O primeiro acesso dá nome à empresa principal."""
-        with self._c:
-            self._c.execute("UPDATE empresas SET nome = ? WHERE id = ?", (nome[:100], empresa_id))
 
     def apagar(self, empresa_id: int) -> None:
         with self._c:   # ON DELETE CASCADE apaga usuários, telas, grupos, propagandas, configurações e exibições
