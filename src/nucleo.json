@@ -1,9 +1,10 @@
 {
   "origem": "LordValdemar/plataforma-comanda",
-  "commit": "f976392",
+  "commit": "d31d7c6",
   "infraestrutura": [
     "alertas.py",
     "backup.py",
+    "sqlite/consultas_painel.py",
     "sqlite/datas.py",
     "sqlite/exibicoes.py",
     "sqlite/monitoramento.py",
@@ -11,5 +12,5 @@
     "sqlite/propagandas.py",
     "sqlite/telas.py"
   ],
-  "impressao_digital": "d51c4784126371483e4266d1fab8a1f4c75ff7bb35ac6e41f823c4d984158ba4"
+  "impressao_digital": "25ea5033bd2c95749842e262b4441e4973eb86127412f08e8259ffb397c15497"
 }

@@ -1,11 +1,12 @@
 """Repositórios no SQLite do Painel local.
 
-propagandas.py, telas.py, exibicoes.py, monitoramento.py, permissoes.py e datas.py são cópias da plataforma (conferidas por
+propagandas.py, telas.py, exibicoes.py, monitoramento.py, consultas_painel.py, permissoes.py e datas.py são cópias da plataforma (conferidas por
 tests/test_nucleo.py). Este arquivo e empresas.py não são copiados: ajusta o que o banco daqui tem de diferente.
 """
 
 from src.domain.permissoes import Cadastro
 
+from .consultas_painel import ConsultasDoPainel
 from .empresas import RepositorioDaPlataformaSQLite, RepositorioDeLimitesSQLite
 from .exibicoes import RepositorioDeExibicoesSQLite, apagar_exibicoes_anteriores
 from .monitoramento import RepositorioDeMonitoramentoSQLite
@@ -28,6 +29,7 @@ class RepositorioDePermissoesSQLite(_PermissoesDaPlataforma):
 
 
 __all__ = [
+    "ConsultasDoPainel",
     "RepositorioDaPlataformaSQLite", "RepositorioDeConexoesSQLite", "RepositorioDeExibicoesSQLite",
     "RepositorioDeLimitesSQLite", "RepositorioDeMonitoramentoSQLite", "RepositorioDePermissoesSQLite",
     "RepositorioDePropagandasSQLite", "RepositorioDeTelasSQLite", "apagar_exibicoes_anteriores",

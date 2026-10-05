@@ -376,3 +376,8 @@ def preencher_tamanhos(caminho_banco, pasta_midia):
                     )
     finally:
         conexao.close()
+
+
+def responde():
+    """Para o monitoramento (/saude): levanta erro se o banco não responde."""
+    obter().execute("SELECT 1").fetchone()
