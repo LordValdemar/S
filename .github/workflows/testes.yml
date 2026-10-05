@@ -3,10 +3,37 @@ name: Testes
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  testes:
+  qualidade:
+    name: Lint e tipos
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Verificação de estilo e erros (ruff)
+        run: ruff check --output-format=github .
+      - name: Tipos (mypy) no núcleo
+        run: mypy
+
+  testes:
+    name: Testes (Python ${{ matrix.python }})
+    needs: qualidade
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -18,15 +45,13 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
       - run: pip install -r requirements.txt -r requirements-dev.txt
-      - name: Verificação de estilo e erros (ruff)
-        run: ruff check .
-      - name: Tipos (mypy) no núcleo
-        run: mypy
       - name: Testes automáticos
         run: python -m pytest -q
 
   docker:
+    needs: qualidade
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Monta a imagem Docker
