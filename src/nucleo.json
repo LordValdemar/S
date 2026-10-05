@@ -1,6 +1,6 @@
 {
   "origem": "LordValdemar/plataforma-comanda",
-  "commit": "d31d7c6",
+  "commit": "ae36081",
   "infraestrutura": [
     "alertas.py",
     "backup.py",
@@ -12,5 +12,5 @@
     "sqlite/propagandas.py",
     "sqlite/telas.py"
   ],
-  "impressao_digital": "25ea5033bd2c95749842e262b4441e4973eb86127412f08e8259ffb397c15497"
+  "impressao_digital": "64603d7b669e3ba32be24203730fd669767448df4cd9a147fcd393c7a95bd893"
 }
