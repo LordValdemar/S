@@ -55,6 +55,11 @@ class RepositorioDaPlataformaSQLite(RepositorioDeLimitesSQLite):
         return [linha["arquivo"] for linha in self._c.execute("SELECT arquivo FROM propagandas WHERE empresa_id = ?",
                                                                 (empresa_id,))]
 
+    def renomear(self, empresa_id: int, nome: str) -> None:
+        """O primeiro acesso dá nome à empresa principal."""
+        with self._c:
+            self._c.execute("UPDATE empresas SET nome = ? WHERE id = ?", (nome[:100], empresa_id))
+
     def apagar(self, empresa_id: int) -> None:
         with self._c:   # ON DELETE CASCADE apaga usuários, telas, grupos, propagandas, configurações e exibições
             self._c.execute("DELETE FROM empresas WHERE id = ?", (empresa_id,))

@@ -1,12 +1,15 @@
 """Repositórios no SQLite do Painel local.
 
-propagandas.py, telas.py, exibicoes.py, monitoramento.py, consultas_painel.py, permissoes.py e datas.py são cópias da plataforma (conferidas por
-tests/test_nucleo.py). Este arquivo e empresas.py não são copiados: ajusta o que o banco daqui tem de diferente.
+propagandas.py, telas.py, exibicoes.py, monitoramento.py, consultas_painel.py, permissoes.py e datas.py são cópias
+da plataforma (conferidas por tests/test_nucleo.py). Este arquivo, contas.py, consultas_empresas.py e empresas.py são
+só deste painel: o banco daqui não tem o código da loja, os módulos, a Comanda nem o ponto.
 """
 
 from src.domain.permissoes import Cadastro
 
+from .consultas_empresas import ConsultasDeEmpresas
 from .consultas_painel import ConsultasDoPainel
+from .contas import RepositorioDeContasSQLite
 from .empresas import RepositorioDaPlataformaSQLite, RepositorioDeLimitesSQLite
 from .exibicoes import RepositorioDeExibicoesSQLite, apagar_exibicoes_anteriores
 from .monitoramento import RepositorioDeMonitoramentoSQLite
@@ -29,7 +32,7 @@ class RepositorioDePermissoesSQLite(_PermissoesDaPlataforma):
 
 
 __all__ = [
-    "ConsultasDoPainel",
+    "ConsultasDeEmpresas", "ConsultasDoPainel", "RepositorioDeContasSQLite",
     "RepositorioDaPlataformaSQLite", "RepositorioDeConexoesSQLite", "RepositorioDeExibicoesSQLite",
     "RepositorioDeLimitesSQLite", "RepositorioDeMonitoramentoSQLite", "RepositorioDePermissoesSQLite",
     "RepositorioDePropagandasSQLite", "RepositorioDeTelasSQLite", "apagar_exibicoes_anteriores",
