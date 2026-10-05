@@ -15,10 +15,13 @@ import argparse
 import getpass
 import sys
 
-from propagandas import arquivo_config, create_app, db
+from propagandas import arquivo_config, create_app, db, planos
 from propagandas.auth import EMPRESA_PRINCIPAL, PAPEIS, ErroUsuario, criar_usuario, desativar_2fa, trocar_senha
+from propagandas.auth import servico as servico_de_contas
 from propagandas.backup import criar_backup, restaurar_backup
 from propagandas.planos import MB
+from propagandas.plataforma import servico as servico_da_plataforma
+from src.domain.empresas import DadosDaEmpresa, Limites
 
 
 def pedir_senha():
@@ -29,10 +32,10 @@ def pedir_senha():
 
 
 def buscar_usuario(conexao, nome):
-    linha = conexao.execute("SELECT id FROM usuarios WHERE usuario = ?", (nome,)).fetchone()
-    if linha is None:
+    contas = servico_de_contas(conexao).contas_chamadas(nome)   # aqui o nome é único no sistema todo
+    if not contas:
         sys.exit(f"Usuário “{nome}” não encontrado.")
-    return linha["id"]
+    return contas[0].id
 
 
 def main(argumentos=None):
@@ -69,29 +72,19 @@ def main(argumentos=None):
         conexao = db.obter()
         try:
             if args.comando == "listar-empresas":
-                for e in conexao.execute(
-                    "SELECT e.*, (SELECT COUNT(*) FROM telas t WHERE t.empresa_id = e.id) AS telas, "
-                    "(SELECT COALESCE(SUM(tamanho), 0) FROM propagandas p WHERE p.empresa_id = e.id) AS bytes "
-                    "FROM empresas e ORDER BY e.id"
-                ):
+                for e in planos.consultas(conexao).empresas_com_uso():
                     situacao = "ativa" if e["ativa"] else "SUSPENSA"
                     print(f"{e['id']:>4}  {e['nome']:<30} {situacao:<9} telas {e['telas']}/{e['limite_telas'] or '∞'}  "
                           f"{e['bytes'] / MB:.1f}/{e['limite_mb'] or '∞'} MB")
 
             elif args.comando == "criar-empresa":
-                with conexao:
-                    novo = conexao.execute(
-                        "INSERT INTO empresas (nome, limite_telas, limite_mb) VALUES (?, ?, ?)",
-                        (args.nome, args.limite_telas, args.limite_mb),
-                    ).lastrowid
+                novo, _ = servico_da_plataforma(conexao).criar(
+                    DadosDaEmpresa(args.nome, Limites(args.limite_telas, args.limite_mb), "painel"))
                 print(f"Empresa “{args.nome}” criada com id {novo}.")
                 print(f"Crie o administrador: python gerenciar.py criar-usuario NOME --empresa {novo}")
 
             elif args.comando == "listar-usuarios":
-                for linha in conexao.execute(
-                    "SELECT u.*, e.nome AS empresa FROM usuarios u JOIN empresas e ON e.id = u.empresa_id "
-                    "ORDER BY e.id, u.usuario"
-                ):
+                for linha in planos.consultas(conexao).todos_os_usuarios():
                     extras = (" +plataforma" if linha["plataforma"] else "") + (" +2FA" if linha["totp_segredo"] else "")
                     print(f"{linha['usuario']:<25} {PAPEIS[linha['papel']]:<14} {linha['empresa']:<25}{extras}")
 
